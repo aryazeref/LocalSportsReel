@@ -104,6 +104,8 @@
 .selectedMetric { background: #1e2b1e; }
 .metricVariant { display: block; color: #93a9b9; font-size: 9px; font-weight: 400; margin-top: 6px; }
 .notes .tableWrap { margin-top: 16px; }
+.seasonEvaluation { border-top: 1px solid #2f3d49; margin-top: 22px; padding-top: 22px; }
+.seasonEvaluation h3 { color: #e3edf2; font-size: 16px; margin: 0; }
 .chosen { display: inline-block; color: #d3fa5b; font-size: 8px; border: 1px solid #536d34; border-radius: 3px; margin-left: 8px; padding: 3px 5px; }
 .loading { display: flex; align-items: center; gap: 17px; border: 1px solid #3a4c36; border-radius: 10px; padding: 25px; margin: 23px 0; background: #151e1a; }
 .loading strong { color: #d3e2d2; font-size: 14px; }

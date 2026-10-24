@@ -47,6 +47,22 @@ function modelLabel(name: string): string {
   return name.replace(/_/g, " ");
 }
 
+function seasonLabel(season: number): string {
+  return `${season - 1}–${String(season).slice(-2)}`;
+}
+
+function seasonSpan(seasons?: number[]): string | null {
+  if (!seasons?.length) return null;
+  const ordered = [...new Set(seasons)].sort((a, b) => a - b);
+  return ordered.length === 1 ? `1 season · ${seasonLabel(ordered[0])}`
+    : `${ordered.length} seasons · ${ordered[0] - 1}–${ordered[ordered.length - 1]}`;
+}
+
+function validMetrics(metrics?: ModelMetric[]): ModelMetric[] {
+  return (metrics ?? []).filter(metric => Number.isFinite(metric.log_loss)
+    && Number.isFinite(metric.brier) && Number.isFinite(metric.final_winner_accuracy));
+}
+
 function outcomeLabel(outcome: Outcome, fixture: Forecast): string {
   const winner = outcome.startsWith("home") ? fixture.home_team.name : fixture.away_team.name;
   return `${winner} wins ${outcome.endsWith("regulation") ? "in regulation" : "in extra time"}`;
@@ -115,14 +131,14 @@ function ForecastCard({ fixture, selected, onSelect }: { fixture: Forecast; sele
   </article>;
 }
 
-function MetricTable({ metrics, selected }: { metrics: ModelMetric[]; selected?: string }) {
+function MetricTable({ metrics, selected, rolling = false }: { metrics: ModelMetric[]; selected?: string; rolling?: boolean }) {
   return <div className={styles.tableWrap}>
     <table className={styles.metricTable}>
-      <caption>Historical test results · lower log loss and Brier score are better</caption>
-      <thead><tr><th scope="col">Model</th><th scope="col">Log loss</th><th scope="col">Brier score</th><th scope="col">Final-winner accuracy</th></tr></thead>
-      <tbody>{metrics.map(metric => <tr key={metric.name} className={metric.name === selected ? styles.selectedMetric : undefined}>
-        <th scope="row">{modelLabel(metric.name)}{metric.name === selected && <span className={styles.chosen}>Selected</span>}
-          {metric.feature_set && <small className={styles.metricVariant}>{metric.feature_set === "homeaway" ? "18-feature" : "6-feature"} context · {metric.window}-match window</small>}</th>
+      <caption>{rolling ? "Rolling historical policy comparison" : "Historical test results"} · lower log loss and Brier score are better</caption>
+      <thead><tr><th scope="col">{rolling ? "Forecast policy" : "Model"}</th><th scope="col">Log loss</th><th scope="col">Brier score</th><th scope="col">Final-winner accuracy</th></tr></thead>
+      <tbody>{metrics.map(metric => <tr key={metric.name} className={metric.selected || metric.name === selected ? styles.selectedMetric : undefined}>
+        <th scope="row">{metric.display_name || modelLabel(metric.name)}{(metric.selected || metric.name === selected) && <span className={styles.chosen}>{rolling ? "Selected policy" : "Selected"}</span>}
+          {metric.feature_set && metric.window != null && <small className={styles.metricVariant}>{metric.feature_set === "homeaway" ? "18-feature" : "6-feature"} context · {metric.window}-match window</small>}</th>
         <td>{metric.log_loss.toFixed(3)}</td><td>{metric.brier.toFixed(3)}</td><td>{percent(metric.final_winner_accuracy)}</td>
       </tr>)}</tbody>
     </table>
@@ -204,8 +220,9 @@ export default function PredictionsPage() {
   const scenarioByTeam = new Map((scenario?.teams ?? []).map(team => [team.team_id, team]));
   const model = data?.model;
   const test = data?.evaluation.test;
-  const metricRows = (test?.metrics ?? []).filter(metric => Number.isFinite(metric.log_loss)
-    && Number.isFinite(metric.brier) && Number.isFinite(metric.final_winner_accuracy));
+  const rollingEvaluation = test?.kind === "retrospective_rolling_origin"
+    && (test.seasons?.length ?? test.per_season?.length ?? 0) > 1;
+  const metricRows = validMetrics(test?.metrics);
   const testedModel = metricRows.find(metric => metric.selected || metric.name === data?.evaluation.selected_model);
   const calibration = (testedModel?.calibration_bins ?? []).filter(bin => bin.count > 0
     && bin.predicted != null && bin.observed != null && Number.isFinite(bin.predicted) && Number.isFinite(bin.observed));
@@ -333,21 +350,39 @@ export default function PredictionsPage() {
       </section>
 
       <section className={styles.evidenceSection} aria-labelledby="evidence-heading">
-        <div className={styles.sectionHeading}><div><p className={styles.eyebrow}>THE EVIDENCE BEHIND THE ESTIMATE</p><h2 id="evidence-heading">How the model was tested</h2></div>
+        <div className={styles.sectionHeading}><div><p className={styles.eyebrow}>THE EVIDENCE BEHIND THE ESTIMATE</p><h2 id="evidence-heading">Historical evidence</h2></div>
           <span className={styles.sectionTag}>HISTORICAL EVALUATION</span></div>
         <div className={styles.evidenceCards}>
-          <div><span>Selected model</span><strong>{model?.display_name || modelLabel(model?.name ?? "Model")}</strong><small>Chosen using earlier validation data</small></div>
-          <div><span>Historical training</span><strong>{model?.training_matches?.toLocaleString() ?? "Not reported"}<small> matches</small></strong><small>Trained through {dateLabel(model?.training_cutoff, false)}</small></div>
-          <div><span>Held-out test</span><strong>{test?.count?.toLocaleString() ?? "Not reported"}<small> matches</small></strong><small>{dateLabel(test?.start, false)} – {dateLabel(test?.end, false)}</small></div>
+          <div><span>Current forecast model</span><strong>{model?.display_name || modelLabel(model?.name ?? "Model")}</strong><small>Chosen using earlier validation data, then refit on known history</small></div>
+          <div><span>Historical training</span><strong>{model?.training_matches?.toLocaleString() ?? "Not reported"}<small> matches</small></strong>
+            {seasonSpan(model?.training_seasons) && <small>{seasonSpan(model?.training_seasons)}</small>}
+            <small>Trained through {dateLabel(model?.training_cutoff, false)}</small></div>
+          <div><span>{rollingEvaluation ? "Rolling historical evaluation" : "Historical test period"}</span><strong>{test?.count?.toLocaleString() ?? "Not reported"}<small> matches</small></strong>
+            {seasonSpan(test?.seasons ?? (test?.season != null ? [test.season] : undefined)) && <small>{seasonSpan(test?.seasons ?? (test?.season != null ? [test.season] : undefined))}</small>}
+            <small>{dateLabel(test?.start, false)} – {dateLabel(test?.end, false)}</small></div>
         </div>
-        {metricRows.length > 0 ? <MetricTable metrics={metricRows} selected={data.evaluation.selected_model} />
+        {rollingEvaluation && <p className={styles.scope}>Each season was predicted using earlier data; the selected method and history window can change between seasons. These pooled results evaluate that selection policy, not the current fixed model. Retrospective evaluation, not a new blind test.</p>}
+        {!rollingEvaluation && test?.independent_blind === false && <p className={styles.scope}>Retrospective historical evaluation, not a new blind test.</p>}
+        {metricRows.length > 0 ? <MetricTable metrics={metricRows} selected={data.evaluation.selected_model} rolling={rollingEvaluation} />
           : <p className={styles.notice}>Detailed historical metrics were not provided by the model response.</p>}
         <p className={styles.scope}>Log loss and Brier score evaluate the four regulation/extra-time probabilities. Final-winner accuracy measures which team won, including overtime and shootouts. Historical performance does not guarantee future results.</p>
+        {(test?.per_season?.length ?? 0) > 0 && <details className={styles.notes}>
+          <summary>Season-by-season evaluation ({test?.per_season?.length} seasons)</summary>
+          <p>Each season has its own earlier validation period and selected configuration. The comparison below retains the models selected before that season&apos;s evaluation.</p>
+          {test?.per_season?.map(period => <section key={period.season} className={styles.seasonEvaluation} aria-label={`Evaluation for ${seasonLabel(period.season)}`}>
+            <h3>{seasonLabel(period.season)} · {period.count?.toLocaleString() ?? "Not reported"} matches</h3>
+            <p>{dateLabel(period.start, false)} – {dateLabel(period.end, false)}.
+              {period.selected_model && ` Selected: ${modelLabel(period.selected_model)}.`}</p>
+            {period.validation && <p>Earlier validation: {dateLabel(period.validation.start, false)} – {dateLabel(period.validation.end, false)}
+              {period.validation.count != null && ` · ${period.validation.count.toLocaleString()} matches`}.</p>}
+            <MetricTable metrics={validMetrics(period.metrics)} selected={period.selected_model} />
+          </section>)}
+        </details>}
         {calibration.length > 0 && <details className={styles.notes}>
           <summary>Did the home-win chances match past outcomes?</summary>
-          <p>Held-out predictions grouped by home-win probability. Compare the average forecast with how often the home team actually won. Small groups are less reliable.</p>
+          <p>{rollingEvaluation ? "Pooled historical forecasts from the selected policy" : "Historical test forecasts"} grouped by home-win probability. Compare the average forecast with how often the home team actually won. Small groups are less reliable.</p>
           <div className={styles.tableWrap}><table className={styles.metricTable}>
-            <caption>Selected model · historical home-win calibration check</caption>
+            <caption>{rollingEvaluation ? "Selected policy" : "Selected model"} · historical home-win calibration check</caption>
             <thead><tr><th scope="col">Forecast band</th><th scope="col">Matches</th><th scope="col">Average forecast</th><th scope="col">Observed home wins</th></tr></thead>
             <tbody>{calibration.map((bin, index) => <tr key={index}><th scope="row">{percent(bin.lower, 0)}–{percent(bin.upper, 0)}</th>
               <td>{bin.count}</td><td>{percent(bin.predicted as number)}</td><td>{percent(bin.observed as number)}</td></tr>)}</tbody>

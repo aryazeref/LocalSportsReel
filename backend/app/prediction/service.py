@@ -22,10 +22,10 @@ from .domain import HELSINKI, Match, OUTCOMES, OUTCOME_POINTS, Standing, canonic
 from .engine import ModelBundle, train_model
 from .schemas import ForecastFixture, ForecastModel, ImpactResponse, PredictionsResponse
 from .simulation import simulate_scenarios
+from .settings import PredictionConfigurationError, PredictionSettings, resolve_settings
 
 logger = logging.getLogger(__name__)
-HISTORY_SEASONS = 6
-PIPELINE_VERSION = 1
+PIPELINE_VERSION = 2
 _prepare_lock = asyncio.Lock()
 _simulation_lock = asyncio.Semaphore(2)
 _cached_context = None
@@ -59,9 +59,9 @@ def _result_hash(matches: list[Match]) -> str:
     return hashlib.sha256(json.dumps(values, sort_keys=True).encode()).hexdigest()
 
 
-def _train(history: list[Match], test_season: int) -> ModelBundle:
+def _train(history: list[Match], test_season: int, test_seasons: int = 1) -> ModelBundle:
     with threadpool_limits(limits=2):
-        return train_model(history, test_season=test_season)
+        return train_model(history, test_season=test_season, test_seasons=test_seasons)
 
 
 def _write_json(path: Path, value: dict):
@@ -80,17 +80,21 @@ def _write_json(path: Path, value: dict):
             temporary.unlink(missing_ok=True)
 
 
-async def context(*, refresh: bool = False) -> PredictionContext:
+async def context(*, refresh: bool = False, settings: PredictionSettings | None = None) -> PredictionContext:
     """The first visit prepares historical data/model; later visits reuse JSON."""
     global _cached_context
     now, season = utc_now(), current_season()
+    try:
+        settings = (settings or resolve_settings(season)).validate(season)
+    except PredictionConfigurationError as error:
+        raise PredictionUnavailable(str(error)) from error
     try:
         current = await data.load_season(season, refresh=refresh)
     except data.PredictionDataError as error:
         raise PredictionUnavailable(str(error), 502) from error
     today = now.astimezone(HELSINKI).date()
     known = [m for m in current.matches if m.outcome is not None and m.day < today]
-    signature = (season, today.isoformat(), _result_hash(known))
+    signature = (season, today.isoformat(), _result_hash(known), settings.history_seasons, settings.test_seasons)
     async with _prepare_lock:
         if not refresh and _cached_context is not None and _cached_context[0] == signature:
             stored = _cached_context[1]
@@ -102,7 +106,7 @@ async def context(*, refresh: bool = False) -> PredictionContext:
                 return await data.load_season(year, refresh=refresh)
 
         try:
-            seasons = list(range(season - HISTORY_SEASONS + 1, season))
+            seasons = list(range(season - settings.history_seasons + 1, season))
             historical = await asyncio.gather(*(get_year(year) for year in seasons))
         except data.PredictionDataError as error:
             raise PredictionUnavailable(str(error), 502) from error
@@ -114,27 +118,35 @@ async def context(*, refresh: bool = False) -> PredictionContext:
              if m.outcome is not None and m.day < today],
             key=lambda match: (match.start, match.season, match.game_id),
         )
-        fingerprint = _result_hash(history)
+        fingerprint = hashlib.sha256(json.dumps({
+            'results': _result_hash(history), 'settings': settings.as_dict(),
+            'pipeline_version': PIPELINE_VERSION,
+        }, sort_keys=True).encode()).hexdigest()
         artifact = data.CACHE_DIR / 'model-v1.json'
         bundle = None
         if not refresh and artifact.exists():
             try:
                 value = json.loads(artifact.read_text(encoding='utf-8'))
                 candidate = ModelBundle.from_dict(value)
-                if candidate.metadata.get('service_fingerprint') == fingerprint and candidate.metadata.get('pipeline_version') == PIPELINE_VERSION:
+                if (candidate.metadata.get('service_fingerprint') == fingerprint
+                    and candidate.metadata.get('pipeline_version') == PIPELINE_VERSION
+                    and candidate.metadata.get('preparation_settings') == settings.as_dict()):
                     bundle = candidate
             except (ValueError, KeyError, TypeError, OSError):
                 logger.warning('Prediction artifact could not be restored; preparing a fresh model')
         if bundle is None:
             logger.info('Preparing chronological prediction evaluation on %d known results', len(history))
             try:
-                bundle = await asyncio.to_thread(_train, history, season - 1)
+                bundle = await asyncio.to_thread(_train, history, season - 1, settings.test_seasons)
             except ValueError as error:
                 raise PredictionUnavailable(f'Forecast preparation needs more usable history: {error}') from error
             bundle.metadata['service_fingerprint'] = fingerprint
             bundle.metadata['pipeline_version'] = PIPELINE_VERSION
+            bundle.metadata['preparation_settings'] = settings.as_dict()
+            bundle.metadata['history_seasons'] = settings.history_seasons
+            bundle.metadata['evaluation_test_season_count'] = settings.test_seasons
             bundle.metadata['dataset_manifest'] = [
-                {'season': season - HISTORY_SEASONS + 1 + index,
+                {'season': season - settings.history_seasons + 1 + index,
                  'sha256': snapshot.source_hash,
                  'fetched_at': snapshot.fetched_at.isoformat(),
                  'matches': len(snapshot.matches), 'diagnostics': snapshot.diagnostics}
@@ -186,6 +198,9 @@ def _model_metadata(bundle: ModelBundle) -> ForecastModel:
         model_version=meta['model_version'], feature_set=meta['feature_set'], window=meta['window'],
         training_cutoff=meta['training_cutoff'], training_matches=meta['usable_matches'],
         trained_at=meta['created_at'],
+        training_seasons=meta.get('training_seasons', []),
+        history_seasons=meta.get('history_seasons', len(meta.get('training_seasons', []))),
+        evaluation_test_seasons=meta.get('evaluation_test_seasons', []),
     )
 
 

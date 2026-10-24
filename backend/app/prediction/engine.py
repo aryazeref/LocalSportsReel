@@ -275,29 +275,17 @@ class ModelBundle:
         return results
 
 
-def train_model(matches: list[Match], *, test_season: int | None = None) -> ModelBundle:
-    usable = validated_history(matches)
-    if len(usable) < 250:
-        raise ValueError("At least 250 valid completed matches across training and test periods are required")
-    seasons = sorted({game.season for game in usable})
-    current_year = datetime.now(HELSINKI).year + (datetime.now(HELSINKI).month >= 7)
-    if test_season is None:
-        completed = [season for season in seasons if season < current_year]
-        test_season = completed[-1] if completed else seasons[-1]
-    if test_season not in seasons:
-        raise ValueError("The requested held-out season has no usable results")
-    test_start = min(game.day for game in usable if game.season == test_season)
-    history = [game for game in usable if game.day < test_start]
-    if len(history) < 150:
-        raise ValueError("Insufficient completed matches before the held-out season")
-    # Cache chronological feature construction by representation/window.
-    rows_by_key: dict[tuple, list[dict]] = {}
-    for spec in _specs():
-        key = spec["window"], spec["feature_set"]
-        if key not in rows_by_key:
-            rows_by_key[key] = build_feature_rows(usable, *key)
-    candidates, validation_predictions = [], {}
-    specs = _specs()
+def _evaluate_origin(
+    rows_by_key: dict[tuple, list[dict]], specs: list[dict], season: int,
+) -> tuple[dict, dict, dict[str, tuple[list[int], list[np.ndarray]]]]:
+    """Select exclusively on earlier dates, then evaluate one subsequent season."""
+    first_rows = next(iter(rows_by_key.values()))
+    test_start = min(row["match"].day for row in first_rows if row["match"].season == season)
+    prior_history = [row for row in first_rows if row["match"].day < test_start]
+    if len(prior_history) < 150:
+        raise ValueError(f"Insufficient completed matches before held-out season {season}")
+    candidates: list[dict] = []
+    validation_predictions: dict[str, tuple[list, list, list]] = {}
     for spec in specs:
         rows = rows_by_key[spec["window"], spec["feature_set"]]
         prior_rows = [row for row in rows if row["match"].day < test_start]
@@ -314,36 +302,132 @@ def train_model(matches: list[Match], *, test_season: int | None = None) -> Mode
         candidates.append({**spec, **{k: v for k, v in metrics.items() if k != "calibration_bins"}})
         validation_predictions[spec["name"]] = (labels, probabilities, valid_rows)
     if not candidates:
-        raise ValueError("No model could be evaluated with the available chronology")
+        raise ValueError(f"No model could be evaluated before held-out season {season}")
     candidates.sort(key=lambda item: (item["log_loss"], item["brier"], item["name"]))
-    selected = next(spec for spec in specs if spec["name"] == candidates[0]["name"])
-    # Report one preselected candidate per family, not the best on the test set.
-    compared = {selected["name"]}
-    for algorithm in ("prior", "elo", "knn", "logistic"):
+    specs_by_name = {spec["name"]: spec for spec in specs}
+    selected = specs_by_name[candidates[0]["name"]]
+    policy_specs = {"selected_policy": selected}
+    for algorithm, policy in (("prior", "league_prior"), ("elo", "elo"),
+                              ("knn", "knn_policy"), ("logistic", "logistic_policy")):
         best = next((item for item in candidates if item["algorithm"] == algorithm), None)
         if best:
-            compared.add(best["name"])
-    test_metrics = []
+            policy_specs[policy] = specs_by_name[best["name"]]
+    compared = {spec["name"] for spec in policy_specs.values()}
+    test_metrics, predictions_by_spec = [], {}
     test_rows_selected = None
     for spec in specs:
         if spec["name"] not in compared:
             continue
         rows = rows_by_key[spec["window"], spec["feature_set"]]
         training = [row for row in rows if row["match"].day < test_start]
-        testing = [row for row in rows if row["match"].season == test_season]
+        testing = [row for row in rows if row["match"].season == season]
         fitted = _fit(spec, training)
-        metrics = probability_metrics([row["label"] for row in testing], _predict_rows(fitted, testing))
+        probabilities = _predict_rows(fitted, testing)
+        labels = [row["label"] for row in testing]
+        metrics = probability_metrics(labels, probabilities)
         test_metrics.append({**spec, **metrics, "selected": spec["name"] == selected["name"]})
+        predictions_by_spec[spec["name"]] = labels, probabilities
         if spec["name"] == selected["name"]:
             test_rows_selected = testing
     selected_rows = rows_by_key[selected["window"], selected["feature_set"]]
-    production = _fit(selected, selected_rows)
     _, _, valid_rows = validation_predictions[selected["name"]]
+    validation = {
+        **_range(valid_rows),
+        "folds": len(_folds([row for row in selected_rows if row["match"].day < test_start])),
+        "candidates": candidates,
+    }
+    test = {
+        **_range(test_rows_selected), "season": season, "metrics": test_metrics,
+        "used_for_selection": False,
+        "training_end": max(row["match"].day for row in prior_history).isoformat(),
+    }
+    evaluation = {
+        **test, "selected_model": selected["name"], "feature_set": selected["feature_set"],
+        "window": selected["window"], "k": selected.get("k"), "validation": validation,
+        "policy_models": {policy: spec["name"] for policy, spec in policy_specs.items()},
+    }
+    policy_predictions = {
+        policy: predictions_by_spec[spec["name"]] for policy, spec in policy_specs.items()
+    }
+    return evaluation, selected, policy_predictions
+
+
+_POLICY_NAMES = (
+    ("selected_policy", "selection_policy", "Validation-selected model policy"),
+    ("league_prior", "prior", "Historical league prior"),
+    ("elo", "elo", "Elo baseline"),
+    ("knn_policy", "knn", "Validation-selected kNN policy"),
+    ("logistic_policy", "logistic", "Validation-selected logistic policy"),
+)
+
+
+def train_model(
+    matches: list[Match], *, test_season: int | None = None, test_seasons: int = 1,
+) -> ModelBundle:
+    """Run one or multiple retrospective rolling-origin test seasons.
+
+    Every origin tunes on its own earlier validation history. A later origin may
+    learn from matches in earlier test years because those outcomes are known by
+    then. Neither pooled nor individual test scores choose the production model:
+    the latest origin's pre-test validation selection is refitted for production.
+    """
+    if type(test_seasons) is not int or test_seasons < 1:
+        raise ValueError("test_seasons must be a positive integer")
+    if test_season is not None and type(test_season) is not int:
+        raise ValueError("test_season must be an ending-season integer")
+    usable = validated_history(matches)
+    if len(usable) < 250:
+        raise ValueError("At least 250 valid completed matches across training and test periods are required")
+    seasons = sorted({game.season for game in usable})
+    now = datetime.now(HELSINKI)
+    current_year = now.year + (now.month >= 7)
+    if test_season is None:
+        completed = [season for season in seasons if season < current_year]
+        test_season = completed[-1] if completed else seasons[-1]
+    if test_season not in seasons:
+        raise ValueError("The requested held-out season has no usable results")
+    if test_seasons > len(seasons):
+        raise ValueError("The requested number of held-out seasons exceeds the available history")
+    requested_seasons = list(range(test_season - test_seasons + 1, test_season + 1))
+    missing = [season for season in requested_seasons if season not in seasons]
+    if missing:
+        raise ValueError(f"Requested held-out seasons have no usable results: {missing}")
+    first_start = min(game.day for game in usable if game.season == requested_seasons[0])
+    if sum(game.day < first_start for game in usable) < 150:
+        raise ValueError("Insufficient completed matches before the earliest held-out season")
+    # Shared across every retrospective origin: extracting a row never uses a
+    # later label, even though the full historical dataset is present in memory.
+    specs = _specs()
+    rows_by_key: dict[tuple, list[dict]] = {}
+    for spec in specs:
+        key = spec["window"], spec["feature_set"]
+        if key not in rows_by_key:
+            rows_by_key[key] = build_feature_rows(usable, *key)
+    evaluations, selections = [], []
+    pooled_predictions: dict[str, tuple[list, list]] = {
+        name: ([], []) for name, _, _ in _POLICY_NAMES
+    }
+    for season in requested_seasons:
+        evaluation, selected, policy_predictions = _evaluate_origin(rows_by_key, specs, season)
+        if test_seasons > 1:
+            absent = set(pooled_predictions) - set(policy_predictions)
+            if absent:
+                raise ValueError(f"Insufficient earlier data to evaluate policies {sorted(absent)} for season {season}")
+        evaluations.append(evaluation)
+        selections.append(selected)
+        for name, (labels, probabilities) in policy_predictions.items():
+            pooled_predictions[name][0].extend(labels)
+            pooled_predictions[name][1].extend(probabilities)
+    latest, selected = evaluations[-1], selections[-1]
+    selected_rows = rows_by_key[selected["window"], selected["feature_set"]]
+    production = _fit(selected, selected_rows)
     digest_input = [(m.season, m.game_id, m.start.isoformat(), m.home_id, m.away_id,
                      m.home_goals, m.away_goals, m.home_regulation_goals, m.away_regulation_goals,
                      m.finish_type) for m in usable]
     digest = hashlib.sha256(json.dumps(digest_input, separators=(",", ":")).encode()).hexdigest()
-    model_digest = hashlib.sha256(json.dumps({"dataset": digest, "spec": selected}, sort_keys=True).encode()).hexdigest()
+    model_digest = hashlib.sha256(json.dumps({
+        "dataset": digest, "spec": selected, "evaluation_test_seasons": requested_seasons,
+    }, sort_keys=True).encode()).hexdigest()
     metadata = {
         "model_version": f"liiga-paper-v1-{model_digest[:12]}",
         "dataset_sha256": digest,
@@ -358,24 +442,56 @@ def train_model(matches: list[Match], *, test_season: int | None = None) -> Mode
         "algorithm": selected["algorithm"], "selected_model": selected["name"],
         "feature_set": selected["feature_set"], "window": selected["window"],
         "k": selected.get("k"), "status": "experimental",
-        "production_refit": "All supplied usable known results; distinct from the earlier held-out evaluation fit",
+        "evaluation_test_seasons": requested_seasons,
+        "evaluation_kind": "retrospective_rolling_origin",
+        "evaluation_independent_blind": False,
+        "production_selection_origin": latest["season"],
+        "production_refit": "Latest origin's pre-test validation choice, refitted on all supplied usable known results; distinct from retrospective evaluation fits",
         "cutoff_policy": "Only results from strictly earlier Helsinki calendar dates; same-day results excluded",
         "rank_definition": "Recent points-per-game form table among clubs known in the season; midranks for statistical ties; not official standings",
         "cold_start_policy": "Fewer than six prior results for either club uses the historical league-prior distribution",
     }
+    if test_seasons == 1:
+        # Preserve the established single-season actual-configuration rows.
+        test = {
+            key: value for key, value in latest.items()
+            if key not in ("selected_model", "feature_set", "window", "k", "validation", "policy_models")
+        }
+        test.update(
+            seasons=requested_seasons, kind="retrospective_rolling_origin",
+            independent_blind=False,
+        )
+    else:
+        test_rows = [row for row in selected_rows if row["match"].season in requested_seasons]
+        metrics = []
+        for name, algorithm, display_name in _POLICY_NAMES:
+            labels, probabilities = pooled_predictions[name]
+            metrics.append({
+                "name": name, "algorithm": algorithm, "display_name": display_name,
+                **probability_metrics(labels, probabilities), "selected": name == "selected_policy",
+            })
+        test = {
+            **_range(test_rows), "season": test_season, "seasons": requested_seasons,
+            "kind": "retrospective_rolling_origin", "independent_blind": False,
+            "used_for_selection": False,
+            "training_end": latest["training_end"], "training_end_scope": "latest_origin_only",
+            "initial_training_end": evaluations[0]["training_end"],
+            "metrics": metrics, "per_season": evaluations,
+        }
     report = {
-        "selected_model": selected["name"], "selection_metric": "chronological validation four-outcome log loss",
+        "selected_model": selected["name"],
+        "selection_metric": "chronological validation four-outcome log loss",
+        "production_selection_origin": latest["season"],
         "feature_set": selected["feature_set"], "window": selected["window"], "k": selected.get("k"),
-        "validation": {**_range(valid_rows), "folds": len(_folds([row for row in selected_rows if row["match"].day < test_start])),
-                       "candidates": candidates},
-        "test": {**_range(test_rows_selected), "season": test_season, "metrics": test_metrics,
-                 "used_for_selection": False, "training_end": max(game.day for game in history).isoformat()},
+        "validation": latest["validation"], "test": test,
         "limitations": [
             "Experimental probabilities; historical performance is not a guarantee of future accuracy.",
+            "Evaluation is a retrospective rolling-origin backtest on historical data already examined during development, not an independent blind test.",
+            "Each origin selects configuration only on earlier validation dates; aggregate test performance is not used to choose the production model.",
             "Current roster, injury and announced-goalie information are not inputs to this first model.",
             "History is carried across seasons; changing squads, schedule formats and new clubs affect reliability.",
             "Smoothing and calibration diagnostics are provided; no claim of perfect probability calibration is made.",
-            "The production model is refitted on later known results after the held-out evaluation; its in-sample fit is not a new test score.",
+            "The production model is refitted on later known results after retrospective evaluation; its in-sample fit is not a new test score.",
         ],
     }
     return ModelBundle(production, metadata, report)

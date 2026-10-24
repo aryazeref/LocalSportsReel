@@ -221,3 +221,44 @@ def test_insufficient_history_and_wrong_artifacts_fail_explicitly(history, bundl
     broken = {**bundle.to_dict(), "artifact_version": -1}
     with pytest.raises(ValueError, match="version"):
         ModelBundle.from_dict(broken)
+
+
+@pytest.fixture(scope='module')
+def rolling_bundle(history):
+    return train_model(history, test_season=2024, test_seasons=2)
+
+
+def test_rolling_report_pools_unequal_season_counts(rolling_bundle):
+    test = rolling_bundle.report['test']
+    assert test['seasons'] == [2023, 2024]
+    assert test['count'] == 300
+    assert test['kind'] == 'retrospective_rolling_origin' and test['independent_blind'] is False
+    assert test['used_for_selection'] is False
+    assert [fold['count'] for fold in test['per_season']] == [180, 120]
+    selected = next(row for row in test['metrics'] if row['name'] == 'selected_policy')
+    folds = [next(row for row in fold['metrics'] if row['selected']) for fold in test['per_season']]
+    weighted = sum(row['log_loss'] * row['count'] for row in folds) / test['count']
+    assert selected['log_loss'] == pytest.approx(weighted)
+    assert sum(row['count'] for row in selected['calibration_bins']) == test['count']
+    assert len(test['metrics']) == 5
+    for fold in test['per_season']:
+        assert fold['training_end'] < fold['start']
+        assert fold['validation']['end'] < fold['start']
+    assert rolling_bundle.metadata['selected_model'] == test['per_season'][-1]['selected_model']
+
+
+def test_later_test_year_cannot_change_earlier_origin_selection(history, rolling_bundle):
+    changed = [match(g.game_id, g.day, season=g.season, home=g.home_id, away=g.away_id,
+                     outcome=3 - g.outcome) if g.season == 2024 else g for g in history]
+    altered = train_model(changed, test_season=2024, test_seasons=2)
+    original = rolling_bundle.report['test']['per_season'][0]
+    earlier = altered.report['test']['per_season'][0]
+    assert earlier['selected_model'] == original['selected_model']
+    assert earlier['validation'] == original['validation']
+    assert earlier['metrics'] == original['metrics']
+
+
+@pytest.mark.parametrize('count', [0, -1, True, 1.5, 4])
+def test_invalid_or_missing_rolling_test_scope_is_explicit(history, count):
+    with pytest.raises(ValueError):
+        train_model(history, test_season=2024, test_seasons=count)

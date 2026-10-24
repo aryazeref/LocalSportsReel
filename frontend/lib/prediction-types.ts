@@ -22,6 +22,7 @@ export type Forecast = {
 
 export type ModelMetric = {
   name: string;
+  display_name?: string;
   log_loss: number;
   brier: number;
   final_winner_accuracy: number;
@@ -37,13 +38,34 @@ export type ModelMetric = {
   }[];
 };
 
+export type SeasonEvaluation = {
+  season: number;
+  start?: string;
+  end?: string;
+  count?: number;
+  selected_model?: string;
+  validation?: { start?: string; end?: string; count?: number };
+  metrics?: ModelMetric[];
+};
+
 export type Evaluation = {
   selected_model?: string;
   feature_set?: string;
   window?: number;
   k?: number | null;
   validation?: { start?: string; end?: string; count?: number; candidates?: ModelMetric[] };
-  test?: { start?: string; end?: string; count?: number; metrics?: ModelMetric[] };
+  test?: {
+    start?: string;
+    end?: string;
+    count?: number;
+    season?: number;
+    seasons?: number[];
+    kind?: string;
+    independent_blind?: boolean;
+    used_for_selection?: boolean;
+    metrics?: ModelMetric[];
+    per_season?: SeasonEvaluation[];
+  };
   limitations?: string[];
   calibration_bins?: unknown[];
 };
@@ -61,6 +83,7 @@ export type PredictionsResponse = {
     window?: number;
     training_cutoff?: string;
     training_matches?: number;
+    training_seasons?: number[];
     trained_at?: string;
   };
   evaluation: Evaluation;

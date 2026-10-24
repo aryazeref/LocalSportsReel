@@ -136,13 +136,13 @@ restarting the server. No additional frontend dependency or LLM key is needed:
 If you do not use a backend `.env`, omit `--env-file .env`. Start the frontend
 as before and select **Predictions** in the navigation bar.
 
-The first visit downloads six ending-seasons of regular-season results and
+The first visit downloads ten ending-seasons of regular-season results and
 prepares the model. Later requests reuse persistent, validated raw snapshots
 and a JSON model in ignored `backend/.prediction-cache/`. The cache can be
 relocated using `PREDICTION_CACHE_DIR` in the backend process environment.
 Historical snapshots refresh after a day; the current season after two minutes.
-The model refreshes when its completed-results fingerprint changes or its
-pipeline version changes. No credentials are required for the public Liiga API.
+The model refreshes when its completed-results fingerprint, history/evaluation
+settings or pipeline version changes. No credentials are required for the public Liiga API.
 
 To prepare explicitly before opening the page, run from `backend`:
 
@@ -152,20 +152,43 @@ To prepare explicitly before opening the page, run from `backend`:
 
 Use `--refresh` to refresh snapshots and retrain. This prints model provenance
 and evaluation; JSON artifacts and `evaluation.json` remain in the ignored cache.
-The application also prepares on demand, so this command is optional.
+The application also prepares on demand, so this command is optional. The CLI
+loads backend `.env` before resolving cache and scope settings. Optional settings:
+
+```ini
+PREDICTION_HISTORY_SEASONS=10
+PREDICTION_TEST_SEASONS=3
+```
+
+History includes the current season. Test years must leave two earlier seasons
+for training/validation; requests cannot start before ending-season 2000. The
+CLI accepts per-run `--history-seasons 10 --test-seasons 3` overrides. Those flags
+do not rewrite `.env` or reconfigure an already running API. Set the variables
+and restart Uvicorn if the API should use a different non-default scope.
 
 The paper-inspired model compares recent regulation goals scored/conceded and
 form ranks (six/18-feature variants) with historical-prior and Elo baselines.
 Regularized logistic and kNN candidates are selected using earlier chronological
-validation; the most recent prior ending-season is held out for evaluation.
-Production weights are then refitted on all known results from earlier Helsinki
+validation at each rolling origin; three prior seasons are evaluated by default.
+Pooled metrics describe the selection policy across years, whose chosen model
+may change, rather than one fixed current model. This is retrospective evaluation
+on already-inspected historical data, not a newly collected blind test.
+Production uses the latest origin's pre-test validation choice, then refits on all known results from earlier Helsinki
 calendar dates. Same-day results are excluded. Cold-start clubs use a prior,
 and current injuries, starting goalies and xG are not model inputs yet.
 
-**The first measured test did not establish superiority over Elo.** The UI shows
+**The measured tests do not establish reliable superiority over Elo.** The UI shows
 all tested model families and probability-calibration bins. See
-[the initial evaluation](docs/PREDICTION_EVALUATION.md) for actual scores and
+[the expanded evaluation](docs/PREDICTION_EVALUATION.md) for actual scores and
 [the JSON report](docs/prediction-evaluation.json) for provenance.
+
+The initial data scope was six seasons and one 480-match test season. The expanded
+run uses 4,205 usable matches from ten ending-seasons and 1,410 rolling test
+predictions. The provider's shortened seasons and an inconsistent 2021 result
+are recorded rather than filled with synthetic matches. The 12 displayed
+forecasts/API maximum 30 do not cap historical input or season simulations.
+Per-team feature windows (6/12/24/40 matches) and kNN neighbor choices are
+separate modelling settings, not a cap on the training dataset.
 
 Forecasts distinguish final home/away wins from four regulation/extra-time
 outcomes. Select a match and an outcome to compare baseline versus forced-result

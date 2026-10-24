@@ -57,6 +57,9 @@ class ForecastModel(BaseModel):
     training_matches: int
     trained_at: str
     status: str = "experimental"
+    training_seasons: list[int] = Field(default_factory=list)
+    history_seasons: int = 0
+    evaluation_test_seasons: list[int] = Field(default_factory=list)
 
 
 class PredictionsResponse(BaseModel):

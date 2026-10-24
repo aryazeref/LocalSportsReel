@@ -14,6 +14,7 @@ from app.prediction import data, service
 from app.prediction.domain import Match, OUTCOMES, REGULATION, Standing
 from app.prediction.engine import ModelBundle
 from app.prediction.schemas import OutcomeProbabilities
+from app.prediction.settings import PredictionSettings
 
 NOW = datetime(2026, 10, 24, 10, tzinfo=timezone.utc)
 
@@ -267,8 +268,10 @@ def prior_bundle(history):
 
 @pytest.fixture
 def preparation_sources(monkeypatch):
-    monkeypatch.setattr(service, "HISTORY_SEASONS", 2)
+    monkeypatch.setattr(service, "resolve_settings", lambda season: PredictionSettings(4, 1))
     records = {
+        2024: snapshot([game(1, "2023-10-01T15:00:00+00:00", season=2024, outcome=0)], "earliest-season"),
+        2025: snapshot([game(1, "2024-10-01T15:00:00+00:00", season=2025, outcome=3)], "middle-season"),
         2026: snapshot([game(1, "2025-10-01T15:00:00+00:00", season=2026, outcome=0)], "old-season"),
         2027: snapshot([*completed_games(), *upcoming_games(),
                         game(3, "2026-10-24T08:00:00+00:00", outcome=3)], "current-season")}
@@ -276,8 +279,8 @@ def preparation_sources(monkeypatch):
     async def source(season, *, refresh=False):
         calls.append((season, refresh))
         return records[season]
-    def fit(history, test_season):
-        fits.append((tuple(history), test_season))
+    def fit(history, test_season, test_seasons=1):
+        fits.append((tuple(history), test_season, test_seasons))
         return prior_bundle(history)
     monkeypatch.setattr(data, "load_season", source)
     monkeypatch.setattr(service, "_train", fit)
@@ -289,11 +292,11 @@ def test_preparation_excludes_same_day_and_reuses_json_artifact(preparation_sour
     first = asyncio.run(service.context())
     assert len(fits) == 1 and fits[0][1] == 2026
     assert all(match.day < NOW.date() for match in fits[0][0])
-    assert len(fits[0][0]) == 3
+    assert len(fits[0][0]) == 5
     artifact = data.CACHE_DIR / "model-v1.json"
     assert artifact.exists() and (data.CACHE_DIR / "evaluation.json").exists()
     saved = json.loads(artifact.read_text())
-    assert len(saved["metadata"]["dataset_manifest"]) == 2
+    assert len(saved["metadata"]["dataset_manifest"]) == 4
     assert saved["metadata"]["service_fingerprint"]
     cached = asyncio.run(service.context())
     assert cached.bundle is first.bundle and len(fits) == 1
@@ -310,7 +313,7 @@ def test_changed_result_invalidates_model_fingerprint(preparation_sources):
     corrected = game(1, "2026-10-01T15:00:00+00:00", outcome=3)
     records[2027] = snapshot([corrected, *records[2027].matches[1:]], "corrected-current")
     updated = asyncio.run(service.context())
-    assert len(fits) == 2 and updated.history[1].outcome == 3
+    assert len(fits) == 2 and next(m for m in updated.history if m.season == 2027 and m.game_id == 1).outcome == 3
 
 
 def test_new_day_includes_previously_excluded_results(preparation_sources, monkeypatch):
@@ -358,8 +361,8 @@ def test_fixture_starting_during_preparation_is_not_returned(client, preparation
     clock = [NOW]
     monkeypatch.setattr(service, "utc_now", lambda: clock[0])
     original_fit = service._train
-    def slow_preparation(history, test_season):
-        result = original_fit(history, test_season)
+    def slow_preparation(history, test_season, test_seasons=1):
+        result = original_fit(history, test_season, test_seasons)
         clock[0] = NOW + timedelta(seconds=2)
         return result
     monkeypatch.setattr(service, "_train", slow_preparation)
@@ -436,3 +439,32 @@ def test_remaining_team_missing_from_standings_blocks_incomplete_simulation(clie
     response = client.get("/api/liiga/predictions/100/impact?top_n=2")
     assert response.status_code == 409
     assert "fixture teams must exist" in response.json()["detail"]
+
+
+def test_history_scope_change_invalidates_memory_and_artifact(preparation_sources, monkeypatch):
+    records, _, fits = preparation_sources
+    first = asyncio.run(service.context(settings=PredictionSettings(4, 1)))
+    records[2023] = snapshot([game(1, '2022-10-01T15:00:00+00:00', season=2023, outcome=0)], 'extra-season')
+    expanded = asyncio.run(service.context(settings=PredictionSettings(5, 1)))
+    assert len(fits) == 2
+    assert expanded.bundle.metadata['preparation_settings'] == {'history_seasons': 5, 'test_seasons': 1}
+    assert len(expanded.bundle.metadata['dataset_manifest']) == 5
+    assert first.bundle.metadata['service_fingerprint'] != expanded.bundle.metadata['service_fingerprint']
+
+
+def test_evaluation_scope_change_retrains_even_with_same_results(preparation_sources):
+    _, _, fits = preparation_sources
+    first = asyncio.run(service.context(settings=PredictionSettings(4, 1)))
+    # This scope is valid with five seasons and is tested with the same history.
+    # A current season with no older result needs still have its requested snapshot.
+    first_settings = first.bundle.metadata['preparation_settings']
+    assert first_settings == {'history_seasons': 4, 'test_seasons': 1}
+    # Expanding evaluation alone in a five-season scope must change the key.
+    # preparation_sources has no2023: insert it into the mock source mapping.
+    records, _, _ = preparation_sources
+    records[2023] = snapshot([game(1, '2022-10-01T15:00:00+00:00', season=2023, outcome=0)], 'extra-season')
+    baseline = asyncio.run(service.context(settings=PredictionSettings(5, 1)))
+    changed = asyncio.run(service.context(settings=PredictionSettings(5, 2)))
+    assert len(fits) == 3 and fits[-1][2] == 2
+    assert baseline.bundle.metadata['service_fingerprint'] != changed.bundle.metadata['service_fingerprint']
+    assert changed.bundle.metadata['preparation_settings']['test_seasons'] == 2
