@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import type { Forecast, ImpactResponse, ModelMetric, Outcome, PredictionsResponse } from "../../lib/prediction-types";
+import { emptyImpactSnapshot, impactSnapshotKey, parseImpactSnapshot, readStoredImpact,
+  saveImpactSnapshot, subscribeImpactSnapshots, validImpact } from "../../lib/impact-snapshot";
 import styles from "./predictions.module.css";
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000").replace(/\/$/, "");
@@ -151,7 +153,7 @@ export default function PredictionsPage() {
     key: number; data: PredictionsResponse | null; error: string | null;
   } | null>(null);
   const loading = forecastResult?.key !== reload;
-  const data = loading ? null : forecastResult.data;
+  const data = forecastResult?.data ?? null;
   const error = loading ? null : forecastResult.error;
   const [selectedGame, setSelectedGame] = useState<number | null>(null);
   const [selectedOutcome, setSelectedOutcome] = useState<Outcome>("home_regulation");
@@ -176,8 +178,8 @@ export default function PredictionsPage() {
         setSelectedGame(current => current != null && result.fixtures.some(fixture => fixture.game_id === current)
           ? current : result.fixtures[0]?.game_id ?? null);
       } catch (caught) {
-        if (!controller.signal.aborted) setForecastResult({ key: reload, data: null,
-          error: caught instanceof Error ? caught.message : "Forecasts are unavailable." });
+        if (!controller.signal.aborted) setForecastResult(previous => ({ key: reload, data: previous?.data ?? null,
+          error: caught instanceof Error ? caught.message : "Forecasts are unavailable." }));
       }
     }
     void loadForecasts();
@@ -187,6 +189,16 @@ export default function PredictionsPage() {
   const fixture = data?.fixtures.find(item => item.game_id === selectedGame);
   const forecastVersion = data?.generated_at;
   const modelVersion = data?.model.model_version;
+  const snapshotContext = useMemo(() => fixture && modelVersion ? {
+    apiBase: API_BASE, season: fixture.season, gameId: fixture.game_id,
+    homeId: fixture.home_team.team_id, awayId: fixture.away_team.team_id,
+    modelVersion, topN,
+  } : null, [fixture, modelVersion, topN]);
+  const snapshotKey = snapshotContext ? impactSnapshotKey(snapshotContext) : "";
+  const getStoredSnapshot = useCallback(() => readStoredImpact(snapshotKey), [snapshotKey]);
+  const storedSnapshot = useSyncExternalStore(subscribeImpactSnapshots, getStoredSnapshot, emptyImpactSnapshot);
+  const savedImpact = useMemo(() => snapshotContext ? parseImpactSnapshot(storedSnapshot, snapshotContext) : null,
+    [snapshotContext, storedSnapshot]);
   const impactRequestKey = JSON.stringify([selectedGame, topN, forecastVersion, modelVersion, impactRetry]);
   const canLoadImpact = selectedGame != null && Boolean(forecastVersion);
   const impactLoading = canLoadImpact && impactResult?.key !== impactRequestKey;
@@ -195,19 +207,21 @@ export default function PredictionsPage() {
 
   useEffect(() => {
     const controller = new AbortController();
-    if (selectedGame == null || !forecastVersion) return () => controller.abort();
+    if (selectedGame == null || !forecastVersion || !snapshotContext) return () => controller.abort();
+    const context = snapshotContext;
     async function loadImpact() {
       try {
         const query = new URLSearchParams({ top_n: String(topN), simulations: "4000" });
         if (modelVersion) query.set("model_version", modelVersion);
         const response = await fetch(`${API_BASE}/api/liiga/predictions/${selectedGame}/impact?${query}`, { signal: controller.signal });
         const result = await readResponse<ImpactResponse>(response);
-        if (!Array.isArray(result.baseline) || !Array.isArray(result.scenarios) || result.game_id !== selectedGame
-          || result.top_n !== topN || result.scope !== "regular_season_points" || result.model_version !== modelVersion
-          || !OUTCOMES.every(outcome => result.scenarios.some(scenario => scenario.outcome === outcome))) {
+        if (!validImpact(result, context)) {
           throw new Error("The league-impact response has an unexpected format.");
         }
-        if (!controller.signal.aborted) setImpactResult({ key: impactRequestKey, data: result, error: null });
+        if (!controller.signal.aborted) {
+          setImpactResult({ key: impactRequestKey, data: result, error: null });
+          saveImpactSnapshot(context, result);
+        }
       } catch (caught) {
         if (!controller.signal.aborted) setImpactResult({ key: impactRequestKey, data: null,
           error: caught instanceof Error ? caught.message : "League-impact calculations are unavailable." });
@@ -215,9 +229,10 @@ export default function PredictionsPage() {
     }
     void loadImpact();
     return () => controller.abort();
-  }, [selectedGame, topN, forecastVersion, modelVersion, impactRetry, impactRequestKey]);
+  }, [selectedGame, topN, forecastVersion, modelVersion, impactRetry, impactRequestKey, snapshotContext]);
 
-  const activeImpact = impact?.game_id === selectedGame && impact.top_n === topN ? impact : null;
+  const activeImpact = impact ?? savedImpact;
+  const showingSnapshot = Boolean(activeImpact && (!impact || loading || error));
   const scenario = activeImpact?.scenarios.find(item => item.outcome === selectedOutcome);
   const baseline = [...(activeImpact?.baseline ?? [])].sort((a, b) => a.expected_rank - b.expected_rank || a.name.localeCompare(b.name));
   const scenarioByTeam = new Map((scenario?.teams ?? []).map(team => [team.team_id, team]));
@@ -251,7 +266,7 @@ export default function PredictionsPage() {
     {loading && <div role="status" className={styles.loading}><span className={styles.spinner} aria-hidden="true" />
       <div><strong>Preparing the next matchday</strong><p>The first visit may take a minute while historical results and model comparisons are prepared.</p></div>
     </div>}
-    {error && <div role="alert" className={styles.error}><strong>Forecasts are unavailable.</strong> {error}
+    {error && <div role="alert" className={styles.error}><strong>{data ? "Could not refresh forecasts." : "Forecasts are unavailable."}</strong> {error}
       <button className={styles.textButton} onClick={() => setReload(value => value + 1)}>Try again</button></div>}
 
     {data && <>
@@ -300,9 +315,18 @@ export default function PredictionsPage() {
             </button>)}
           </div>
 
-          {impactLoading && <div role="status" className={styles.loading}><span className={styles.spinner} aria-hidden="true" />
+          {showingSnapshot && activeImpact && <div role="status" className={styles.snapshotNotice}>
+            <strong>Last saved calculation · not live standings</strong>
+            <p>Calculated {dateLabel(activeImpact.generated_at)} · Standings fetched {dateLabel(activeImpact.standings_updated_at)} (Helsinki time).
+              {impactLoading || loading ? " Updating; keeping the previous table visible."
+                : impactError ? ` ${impactError}` : " The latest forecasts could not be refreshed."}</p>
+            <p>This saved table includes all four outcome scenarios from that calculation.</p>
+            <button className={styles.textButton} disabled={impactLoading || loading} onClick={() => setImpactRetry(value => value + 1)}>Retry league impact</button>
+          </div>}
+          {impactLoading && !activeImpact && <div role="status" className={styles.loading}><span className={styles.spinner} aria-hidden="true" />
             <div><strong>Projecting the remaining schedule</strong><p>Comparing this outcome with the baseline points race.</p></div></div>}
-          {impactError && <div role="alert" className={styles.error}><strong>League impact is unavailable.</strong> {impactError}
+          {impactError && !activeImpact && <div role="alert" className={styles.error}><strong>League impact is unavailable.</strong> {impactError}
+            <p>No previous calculation is saved in this browser for this match, points-finish target, and model.</p>
             <button className={styles.textButton} onClick={() => setImpactRetry(value => value + 1)}>Retry league impact</button></div>}
 
           {activeImpact && scenario && <>
@@ -312,8 +336,8 @@ export default function PredictionsPage() {
             </div></div>
             <div className={styles.tableWrap} tabIndex={0} role="region" aria-label="League points projections, scroll horizontally for all columns">
               <table className={styles.impactTable}>
-                <caption>Scenario: {selectedLabel}. Baseline order retained for comparison.</caption>
-                <thead><tr><th scope="col">Team</th><th scope="col">Points now</th><th scope="col">Baseline points</th><th scope="col">Scenario points</th>
+                <caption>{showingSnapshot ? "Saved scenario" : "Scenario"}: {selectedLabel}. Baseline order retained for comparison.</caption>
+                <thead><tr><th scope="col">Team</th><th scope="col">{showingSnapshot ? "Points at snapshot" : "Points now"}</th><th scope="col">Baseline points</th><th scope="col">Scenario points</th>
                   <th scope="col">Change</th><th scope="col">Points rank <span>baseline → scenario</span></th><th scope="col">Top {topN} baseline</th><th scope="col">Top {topN} scenario</th></tr></thead>
                 <tbody>{baseline.map(team => {
                   const projected = scenarioByTeam.get(team.team_id);

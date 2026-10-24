@@ -113,6 +113,10 @@
 .spinner { display: block; width: 23px; height: 23px; flex-shrink: 0; border: 2px solid var(--primary-tint-line); border-top-color: var(--primary); border-radius: 50%; animation: spin 1s linear infinite; }
 .notice { color: var(--muted); border: 1px dashed var(--line-strong); border-radius: var(--r-md); padding: 23px; font-size: var(--fs-small); line-height: 1.8; background: var(--surface); }
 .error { border: 1px solid var(--danger-line); border-radius: var(--r-md); background: var(--danger-tint); color: var(--danger); padding: 21px; font-size: var(--fs-small); line-height: 1.8; margin: 20px 0; }
+.snapshotNotice { border: 1px solid var(--warning-line); border-radius: var(--r-md); background: var(--warning-tint); color: var(--text); padding: 21px; font-size: var(--fs-small); line-height: 1.8; margin: 20px 0; }
+.snapshotNotice strong { color: var(--warning); }
+.snapshotNotice p { margin: 8px 0 0; }
+.textButton:disabled { color: var(--disabled); cursor: wait; }
 .textButton { min-height: var(--touch); display: block; padding: 9px 0 0; border: 0; background: transparent; color: var(--link); font-size: var(--fs-small); font-weight: 800; text-decoration: underline; text-underline-offset: 3px; }
 .footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 15px; padding: 25px 0 33px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
 .page a:focus-visible, .page button:focus-visible, .page select:focus-visible, .page summary:focus-visible, .tableWrap:focus-visible { outline: 2px solid var(--primary); outline-offset: 4px; }

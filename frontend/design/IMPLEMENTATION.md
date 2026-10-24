@@ -48,3 +48,22 @@ and correct initial theme with hydration bundles blocked. Existing forecast,
 scenario, show-more, retry, navigation, and mobile interactions were also checked.
 Automated accessibility checks supplement manual visual and keyboard inspection;
 they do not constitute a full accessibility certification.
+
+## Saved league-impact tables
+
+Successful impact calculations are kept in browser storage (up to 20 entries),
+with an in-memory fallback if storage is unavailable. A matching table remains
+visible during refresh or a live-game pause, and can be restored after reload.
+The warning names it as a saved calculation, shows calculation/standings times,
+and changes "Points now" to "Points at snapshot". All four saved outcomes remain
+selectable. A successful retry replaces it with fresh results.
+
+Snapshots are isolated by API, season, game, both teams, model version, and top-N
+target. No saved table means no fallback; this does not reconstruct an earlier
+calculation or bypass backend live-game checks. Browser data is validated before
+display. Clearing browser storage removes persisted snapshots.
+
+Run the focused cache tests with `npm run test:snapshots`. Browser checks cover
+success followed by a live-game pause, pending/failed forecast refresh, reload,
+outcome switching, match/target isolation, retry recovery, and light/dark 390px
+snapshot-notice accessibility.
