@@ -27,6 +27,18 @@ def example_data():
             status="upcoming", home_team=LiigaTeam(name="Tappara", team_id="92:tappara"),
             away_team=LiigaTeam(name="Kärpät", team_id="91:kärpät"),
         ),
+        # Companion facts refer to the top-four race. Use at least five teams
+        # to make the offline fixture representative of a real Liiga table.
+        LiigaGame(
+            id=703, season=2027, start=datetime(2026, 12, 1, 16, tzinfo=timezone.utc),
+            status="upcoming", home_team=LiigaTeam(name="Ilves", team_id="93:ilves"),
+            away_team=LiigaTeam(name="Jukurit", team_id="94:jukurit"),
+        ),
+        LiigaGame(
+            id=704, season=2027, start=datetime(2026, 12, 2, 16, tzinfo=timezone.utc),
+            status="upcoming", home_team=LiigaTeam(name="JYP", team_id="95:jyp"),
+            away_team=LiigaTeam(name="Ilves", team_id="93:ilves"),
+        ),
     )
     return SeasonGames(games, datetime(2026, 10, 24, 10, tzinfo=timezone.utc))
 
@@ -53,7 +65,7 @@ def example_forecast():
 def test_shared_snapshot_keeps_provider_ids_and_result_type():
     snapshot = build_companion_snapshot(example_data())
     assert snapshot.is_mock is False
-    assert set(snapshot.teams) == {"91:kärpät", "92:tappara"}
+    assert set(snapshot.teams) == {"91:kärpät", "92:tappara", "93:ilves", "94:jukurit", "95:jyp"}
     assert snapshot.games[0]["status"] == "final"
     assert snapshot.games[0]["decided"] == "REG"
     assert snapshot.games[1]["status"] == "scheduled"
@@ -92,7 +104,8 @@ def test_companion_teams_are_exposed_through_existing_api(monkeypatch):
     assert result.status_code == 200
     value = result.json()
     assert value["data_mode"] == "real"
-    assert {item["id"] for item in value["teams"]} == {"91:kärpät", "92:tappara"}
+    assert len(value["teams"]) == 5
+    assert {item["id"] for item in value["teams"]} >= {"91:kärpät", "92:tappara"}
 
 
 def test_companion_rejects_invalid_chat_and_unknown_team(monkeypatch):
