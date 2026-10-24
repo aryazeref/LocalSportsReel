@@ -62,7 +62,10 @@ NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
 
 ## Try the real Liiga integration
 
-With both servers running, navigate to `/liiga` in the frontend. Select a season
+With both servers running, use the shared **Home / Liiga** navigation bar to
+switch between the fictional story homepage and real Liiga match centre. The
+current page is highlighted, and both links stay visible on mobile.
+On `/liiga`, select a season
 and team to see fixtures and statistics calculated by FastAPI. The default is
 the current Helsinki season, identified by its ending year (2027 means 2026–27;
 the automatic default switches in July). Older seasons can be selected too.

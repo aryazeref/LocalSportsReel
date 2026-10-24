@@ -186,10 +186,6 @@ export default function LiigaPage() {
 
   return (
     <main className={styles.page}>
-      <nav className={styles.nav} aria-label="Main navigation">
-        <a href="/" className={styles.brand}><span>↗</span> LocalSportsReel<span className={styles.brandDot}>.</span></a>
-        <span className={styles.sourceBadge}>LIIGA · FINLAND</span>
-      </nav>
       <header className={styles.header}>
         <div>
           <p className={styles.eyebrow}>THE SCORE. THE FORM. THE BIGGER PICTURE.</p>

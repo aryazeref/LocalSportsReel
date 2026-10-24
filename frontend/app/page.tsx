@@ -3,7 +3,6 @@
 // A Client Component can respond to clicks and update the browser immediately.
 // Later we can move non-interactive sections into Next.js Server Components.
 import { useEffect, useState } from "react"; // React hooks for state and side effects
-import Link from "next/link";
 import type { FeedResponse, Moment, Story } from "../lib/types"; // Built-in TypeScript types for the API responses and data structures
 
 const API = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
@@ -119,13 +118,6 @@ export default function HomePage() {
 
   return (
     <main className="appShell">
-      <header className="topbar">
-        <a className="brand" href="/" aria-label="Local SportsReel homepage">
-          <span className="brandMark">↗</span><span>KUCING<span className="brandThin">MAEW</span><span className="brandDot">.</span></span>
-        </a>
-        <span className="topbarRight"><Link href="/liiga" className="liigaNavLink">LIIGA MATCH CENTRE ↗</Link><span className="pulse" /> THE STORIES NEAR YOU <span className="beta">HACKATHON DEMO</span></span>
-      </header>
-
       <section className="hero">
         <div className="heroText">
           <div className="sectionLabel"><span className="labelDash" /> A NEW WAY TO FOLLOW SPORTS</div>
