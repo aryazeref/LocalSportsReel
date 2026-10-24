@@ -5,8 +5,8 @@
  *
  * The metadata (goals, scorers, teams, scores) comes from the SAME Liiga
  * API/cache as our match centre and predictions. Video is deliberately
- * separate: only rights-approved clips or private on-device demo previews
- * can be played. Users can comment on the selected reel locally.
+ * separate: only rights-approved clips can be played. Otherwise the UI
+ * explicitly says "Video unavailable". Comments are kept browser-local.
  */
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -77,7 +77,7 @@ export default function HomePage() {
         <h1>THE GAME.<br /><span>THE <em>MOMENT.</em></span></h1>
         <p>Catch the latest Liiga goal moments, discover the match behind each clip and talk about it with other fans—starting with a local demo discussion.</p>
         <div className="heroPills">
-          <span>▶ 30–60s clips</span>
+          <span>▶ Short-video concept</span>
           <span>🏒 Real Liiga goal data</span>
           <span>♡ Reactions for every moment</span>
         </div>
@@ -101,8 +101,8 @@ export default function HomePage() {
           <p>Recent goals from actual Liiga matches, ready to be paired with approved video clips.</p>
         </div>
         <div className="demoBanner">
-          <span className="notice-label">Clip demo</span>
-          <span>Video is playable when approved media is connected or you preview your own 30–60s file. Never scraped from Liiga.</span>
+          <span className="notice-label">Video unavailable</span>
+          <span>Real match moments and comments are available. Highlight footage is not included in this demo.</span>
         </div>
       </div>
       <div className="filters">
@@ -128,7 +128,7 @@ export default function HomePage() {
       {data && reels.length > 0 && <>
         <ReelViewer reels={reels} />
         <p className="feedSource">Match facts: {data.source} · Updated {matchTime(data.updated_at)} (Helsinki time).
-          The clip player is separate from provider match data. Local video previews and comments are not published.</p>
+          Highlight footage is unavailable without approved media. Comments are stored in this browser only.</p>
       </>}
     </section>
 

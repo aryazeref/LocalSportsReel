@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import type { ChangeEvent, FormEvent, KeyboardEvent } from "react";
+import { useState } from "react";
+import type { FormEvent, KeyboardEvent } from "react";
 import Link from "next/link";
 import type { Reel } from "../lib/reel-feed";
 import { reelScore } from "../lib/reel-feed";
@@ -11,8 +11,6 @@ import {
 import styles from "./reel-viewer.module.css";
 
 type Props = { reels: Reel[] };
-const MAX_BYTES = 100 * 1024 * 1024;
-const VIDEO_TYPES = new Set(["video/mp4", "video/webm"]);
 
 function localDate(value: string): string {
   const date = new Date(value);
@@ -80,32 +78,20 @@ function ReelComments({ reel }: { reel: Reel }) {
 }
 
 /**
- * One active reel at a time prevents every video from auto-playing.
- *
- * Users can select a local 30–60-second MP4/WebM to preview the layout.
- * File bytes never leave the browser and are discarded when the component
- * unmounts or the preview is replaced. Production video must be licensed.
+ * Only the selected reel has a video player; no other video auto-plays.
+ * When there is no rights-approved clip, show "Video unavailable".
+ * Never offer file selection or pretend an illustration is genuine footage.
  */
 export default function ReelViewer({ reels }: Props) {
   const [selectedId, setSelectedId] = useState(reels[0]?.id || "");
   const activeIndex = Math.max(0, reels.findIndex(item => item.id === selectedId));
   const active = reels[activeIndex];
-  const [preview, setPreview] = useState<{ reelId: string; url: string } | null>(null);
-  const [videoError, setVideoError] = useState("");
-  const blobUrl = useRef<string | null>(null);
-  const fileInput = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    return () => { if (blobUrl.current) URL.revokeObjectURL(blobUrl.current); };
-  }, []);
-
   if (!active) return <p className={styles.empty}>No recent goal or match reels are available yet.</p>;
 
   function choose(next: number) {
     const target = reels[Math.max(0, Math.min(reels.length - 1, next))];
     if (!target) return;
     setSelectedId(target.id);
-    setVideoError("");
   }
 
   function onKeyboard(event: KeyboardEvent<HTMLElement>) {
@@ -120,35 +106,7 @@ export default function ReelViewer({ reels }: Props) {
     }
   }
 
-  function addPreview(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-    if (!VIDEO_TYPES.has(file.type) || file.size === 0 || file.size > MAX_BYTES) {
-      setVideoError("Use an MP4 or WebM clip up to 100 MB.");
-      return;
-    }
-    if (blobUrl.current) URL.revokeObjectURL(blobUrl.current);
-    const url = URL.createObjectURL(file);
-    blobUrl.current = url;
-    setVideoError("");
-    setPreview({ reelId: active.id, url });
-  }
-
-  function validateDuration(event: React.SyntheticEvent<HTMLVideoElement>) {
-    if (!(preview?.reelId === active.id)) return;
-    const duration = event.currentTarget.duration;
-    if (!Number.isFinite(duration) || duration < 30 || duration > 60) {
-      setVideoError("Please choose a 30–60-second video. This preview doesn't trim files.");
-      setPreview(null);
-      if (blobUrl.current) {
-        URL.revokeObjectURL(blobUrl.current);
-        blobUrl.current = null;
-      }
-    }
-  }
-
-  const videoSrc = preview?.reelId === active.id ? preview.url : active.videoSrc;
+  const videoSrc = active.videoSrc;
   return <section className={styles.reels} aria-label="Hockey reel player" onKeyDown={onKeyboard}>
     <div className={styles.toolbar}>
       <div>
@@ -177,20 +135,14 @@ export default function ReelViewer({ reels }: Props) {
         <div className={styles.portrait}>
           <div className={styles.videoArea}>
             {videoSrc ? <video key={videoSrc} className={styles.video} src={videoSrc}
-              controls playsInline preload="metadata" onLoadedMetadata={validateDuration}
+              controls playsInline preload="metadata"
               aria-label={"Reel video: " + active.title}>
               Your browser does not support video playback.
             </video> : <div className={styles.videoEmpty}>
               <div className={styles.rinkLines} aria-hidden="true" />
               <span className={styles.hockeyIcon} aria-hidden="true">🏒</span>
-              <strong>Highlight clip not connected</strong>
-              <p>Real Liiga goal information is ready. Play a rights-cleared clip here when one is available.</p>
-              <label className={styles.previewUpload}>
-                Preview your own 30–60s video
-                <input ref={fileInput} type="file" accept="video/mp4,video/webm"
-                  onChange={addPreview} aria-label="Choose a local 30 to 60 second demo video" />
-              </label>
-              <small>Your video stays on this device. It is not uploaded.</small>
+              <strong>Video unavailable</strong>
+              <p>Highlight footage is not available for this moment. Match details and comments remain accessible.</p>
             </div>}
           </div>
           <div className={styles.videoOverlay}>
@@ -206,21 +158,13 @@ export default function ReelViewer({ reels }: Props) {
           <button type="button" disabled={activeIndex === reels.length - 1}
             onClick={() => choose(activeIndex + 1)}>Next ↓</button>
         </div>
-        {videoSrc && <button className={styles.replaceClip} type="button"
-          onClick={() => { setVideoError(""); fileInput.current?.click(); }}>
-          {preview?.reelId === active.id ? "Change local preview" : "Preview another local clip"}
-        </button>}
-        {videoSrc && <input className={styles.hiddenInput} ref={fileInput}
-          type="file" accept="video/mp4,video/webm" onChange={addPreview}
-          aria-label="Choose a different local 30 to 60 second video"/>}
-        {videoError && <p role="alert" className={styles.warning}>{videoError}</p>}
         <div className={styles.moreLinks}>
           <Link href="/liiga">Match centre &amp; Fan Zone ↗</Link>
           <Link href="/predictions">Explore predictions ↗</Link>
         </div>
         <p className={styles.clipNotice}>
           Only rights-approved clips can be published. Liiga event data does not automatically
-          grant footage rights. This demo does not upload user-selected videos.
+          grant footage rights. No match videos are included in this demo.
         </p>
       </div>
       <ReelComments key={active.id} reel={active} />

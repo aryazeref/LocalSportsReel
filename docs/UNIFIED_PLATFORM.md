@@ -39,14 +39,11 @@ not scrape, download, copy or re-host Liiga broadcast footage. Only approved
 MP4/WebM assets are mapped to a stable reel ID in
 \`frontend/lib/reel-media.ts\`, under \`frontend/public/reels/\`.
 
-For a hackathon preview you can instead press **Preview your own 30–60s
-video** on any reel and pick a video *from your own machine* (MP4/WebM,
-max 100 MB). Browsers verify its duration; files are displayed from temporary
-\`blob:\` URLs and never sent to FastAPI, GitHub or cloud storage. This
-visualization is not public video publishing. Add rights-cleared final clips
-for the actual match/goal and update the manifest for a permanent demo.
-Use your team's license/permission documentation to confirm re-use rights.
-Do not commit proprietary footage or external provider tokens.
+No highlight footage is bundled with the hackathon prototype. The reel
+player displays **Video unavailable** unless an approved clip is connected.
+There is no local video upload, file chooser, or preview control. If
+rights-approved footage becomes available later, the existing media manifest
+can connect that footage to the corresponding reel.
 
 Reel IDs use \`{season}:{gameId}:goal:{goalArrayIndex}\` (or
 \`{season}:{gameId}:match\` for missing goal metadata). This keeps the
@@ -170,8 +167,8 @@ Predictions and what-if calculations continue to come exclusively from
   records have **not** been migrated. These are deliberately excluded rather
   than presented as real production services.
 - Exact tie-break/playoff qualification modeling remains unverified.
-- The / home page is a reel-first player with **real goal and match metadata**, but
-  its video requires rights-cleared files or local preview. No licensed clips are shipped.
+- The / home page is a reel-first player with **real goal and match metadata**,
+  but displays "Video unavailable" unless approved media is supplied.
 - No public posting or media-upload endpoint exists. Production requires
   identity, database, object storage, moderation, consent and privacy processes.
 

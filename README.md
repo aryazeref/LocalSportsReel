@@ -1,6 +1,6 @@
 # Local SportsReel · Hackathon MVP 0.1
 
-> **Reel-first homepage:** The homepage displays a vertical goal-highlight player and a clip-specific comment column, using real Liiga goal metadata from `/api/liiga/discover`. Video files require rights approval; to test the interface, choose your own 30–60-second MP4/WebM in the browser (not uploaded). Comments remain private to your browser. See [setup and rights notes](docs/UNIFIED_PLATFORM.md).
+> **Reel-first homepage:** The homepage displays a vertical goal-highlight player and a clip-specific comment column, using real Liiga goal metadata from `/api/liiga/discover`. No videos are included, so each reel shows "Video unavailable" until approved footage is connected. Comments remain private to your browser. See [setup and rights notes](docs/UNIFIED_PLATFORM.md).
 
 > **Unified demo:** The new Next.js `/companion` page combines the Python Fan Companion's fact-verified chat and briefings with existing FastAPI Liiga/prediction services. See [integration documentation](docs/UNIFIED_PLATFORM.md). The Streamlit prototype is retained but is no longer required to use the unified website.
 
