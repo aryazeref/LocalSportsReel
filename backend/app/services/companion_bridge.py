@@ -154,7 +154,7 @@ def companion_response(
     # narrative. Give the user one deterministic, independently verified
     # forecast statement on prediction-related questions.
     if (forecast_info is not None and kind == "chat"
-        and re.search(r"\\b(predict|probabilit|chances?|forecast|win|lose|tonight|next match|what if)\\b",
+        and re.search(r"\b(predict(?:ion|ions)?|probabilit(?:y|ies)|chances?|forecast|win|lose|tonight|next match|what if)\b",
                       message, re.IGNORECASE)
     ):
         output += ("\n\nExperimental pre-match forecast: "
