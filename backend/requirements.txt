@@ -4,3 +4,5 @@ pydantic>=2.8,<3
 openai>=1.100,<3
 pytest>=8,<10
 httpx>=0.27,<1
+# IANA timezone database for ZoneInfo on Windows and minimal Linux systems.
+tzdata>=2024.1

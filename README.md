@@ -93,6 +93,14 @@ live, and upcoming games do not count. Unusable completed results are reported
 as excluded. Wins include overtime and shootouts; recent form shows up to five
 results, newest first. Teams without completed games have no win percentage.
 
+After pulling backend updates, reinstall dependencies using the backend's
+virtual-environment Python: `python -m pip install -r requirements.txt` (with
+the virtual environment activated). Requirements include `tzdata`, which
+supplies the Helsinki timezone database on Windows and systems without an
+OS-provided IANA database. If startup reports `No module named 'tzdata'` or
+`No time zone found with key Europe/Helsinki`, install the updated requirements
+in the same virtual environment used to run Uvicorn, then restart the backend.
+
 These are descriptive statistics, **not official standings or win predictions**.
 Points, competition tie-breakers, ML predictions, and “if they win” scenarios
 are not implemented yet. Provider failures appear as errors; real-data routes
