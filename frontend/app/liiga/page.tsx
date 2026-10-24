@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import MatchFanZone from "../../components/match-fan-zone";
 import styles from "./liiga.module.css";
 
 type Team = { name: string; team_id: string | null; goals: number | null; logo_url: string | null };
@@ -119,6 +120,7 @@ export default function LiigaPage() {
   const [season, setSeason] = useState(currentSeason);
   const [selectedTeam, setSelectedTeam] = useState("");
   const [reload, setReload] = useState(0);
+  const [expandedMatch, setExpandedMatch] = useState<string | null>(null);
   const matchRequestKey = JSON.stringify([season, selectedTeam, reload]);
   const analysisRequestKey = JSON.stringify([season, reload]);
   const [matchResult, setMatchResult] = useState<{
@@ -280,7 +282,7 @@ export default function LiigaPage() {
         {data?.season === season && <>
           {data.games.length === 0 && <p className={styles.notice}>No matches were returned for this team and date range. Try another season or team.</p>}
           <div className={styles.grid}>
-            {data.games.map(game => <article key={game.id} className={styles.card}>
+            {data.games.map(game => <article key={game.id} className={styles.card + (expandedMatch === game.season + ":" + game.id ? " " + styles.cardExpanded : "")}>
               <div className={styles.cardHeader}><time dateTime={game.start}>{formatStart(game.start)}</time>
                 <span className={game.status === "live" ? styles.live : styles.status}>{game.status.toUpperCase()}</span></div>
               <div className={styles.scoreboard}><span className={styles.team}>{game.home_team.name}</span>
@@ -294,6 +296,16 @@ export default function LiigaPage() {
                   </li>)}
                 </ul>
               </details>}
+              <button type="button" className={styles.fanButton}
+                aria-expanded={expandedMatch === game.season + ":" + game.id}
+                onClick={() => setExpandedMatch(current =>
+                  current === game.season + ":" + game.id ? null : game.season + ":" + game.id)}>
+                {expandedMatch === game.season + ":" + game.id ? "Close Fan Zone ↑" : "Open Fan Zone ↗"}
+              </button>
+              {expandedMatch === game.season + ":" + game.id && (
+                <MatchFanZone season={game.season} gameId={game.id}
+                  homeTeam={game.home_team.name} awayTeam={game.away_team.name} />
+              )}
             </article>)}
           </div>
           <p className={styles.updated}>Match times are shown in Helsinki time · Fetched {formatStart(data.updated_at)}</p>
