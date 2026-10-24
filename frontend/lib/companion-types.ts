@@ -6,12 +6,20 @@ export type CompanionAiStatus = {
   message: string;
 };
 export type CompanionTeam = { id: string; name: string; city: string };
+export type CompanionSuggestion = { label: string; question: string };
+export type CompanionLocalAction =
+  | { tool: "set_alert"; team_id: string; season: number; threshold: number | null }
+  | { tool: "save_prediction"; team_id: string; season: number;
+      game_id: string; home_team: string; away_team: string;
+      home_goals: number; away_goals: number };
+
 export type TeamsResponse = {
   season: number;
   source: string;
   as_of: string;
   data_mode: "real";
   teams: CompanionTeam[];
+  suggestions?: CompanionSuggestion[];
 };
 export type FactReceipt = {
   id: string;
@@ -62,6 +70,8 @@ export type CompanionReply = {
   impact: CompanionImpact | null;
   impact_warning: string | null;
   model_note: string;
+  suggestions?: CompanionSuggestion[];
+  action?: CompanionLocalAction | null;
 };
 export type ChatMessage = {
   id: number;

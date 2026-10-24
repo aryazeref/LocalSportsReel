@@ -27,7 +27,7 @@ if str(_COMPANION_ROOT) not in sys.path:
 from companion.companion import Companion  # noqa: E402
 from companion.config import FORMATS, use_league  # noqa: E402
 from companion.data.providers import Snapshot  # noqa: E402
-from companion.facts import build_team_facts  # noqa: E402
+from companion.facts import FactStore, build_team_facts  # noqa: E402
 from companion.verify import verify  # noqa: E402
 
 HELSINKI = ZoneInfo("Europe/Helsinki")
@@ -108,6 +108,8 @@ def team_options(snapshot: Snapshot) -> list[dict]:
 def companion_response(
     snapshot: Snapshot, *, team_id: str, message: str, history: list[dict],
     kind: str, persona: str, language: str, use_ai: bool,
+    user_name: str = "", length: str = "normal",
+    prepared_facts: FactStore | None = None,
     forecast: ForecastFixture | None = None, forecast_model: str | None = None,
     forecast_warning: str | None = None,
     impact: ImpactResponse | None = None,
@@ -119,7 +121,7 @@ def companion_response(
     use_league(FORMATS["liiga"])
     # We intentionally do not call the companion's separate simulation. Its
     # methodology differs from the existing evaluated /predictions model.
-    facts = build_team_facts(snapshot, team_id, None)
+    facts = prepared_facts if prepared_facts is not None else build_team_facts(snapshot, team_id, None)
     forecast_info = None
     if forecast is not None:
         # Every probability comes verbatim from /api/liiga/predictions.
@@ -177,7 +179,8 @@ def companion_response(
             }
     # Use only the server-configured provider; never take credentials from the client.
     backend, config_reason = configured_backend() if use_ai else (None, None)
-    agent = Companion(backend=backend, persona=persona, language=language, length="normal")
+    agent = Companion(backend=backend, persona=persona, language=language,
+                      length=length, user_name=user_name)
     if kind == "brief":
         reply = agent.brief(facts)
     elif kind == "podcast":
@@ -242,4 +245,35 @@ def companion_response(
                        "API_integration prediction engine, never the fan-companion simulator. "
                        "Points-only league scenarios remain available on /predictions; "
                        "exact playoff qualification probabilities are not claimed."),
+    }
+
+
+def local_action_reply(
+    snapshot: Snapshot, *, team_id: str, tool: str, action: dict | None,
+    explanation: str,
+) -> dict:
+    """A verified, deterministic response for a *local* action request.
+
+    No server database, notifications or automatic score checks exist.
+    The frontend must explicitly persist the returned action in its
+    browser; we never claim an alert was scheduled or a prediction published.
+    """
+    use_league(FORMATS["liiga"])
+    facts = build_team_facts(snapshot, team_id, None)
+    report = verify(explanation, facts)
+    if not report.ok:
+        raise ValueError("Local action explanation failed the fact checker")
+    return {
+        "kind": "chat", "text": explanation,
+        "engine": "Offline action router",
+        "generation_mode": "offline",
+        "mode_message": "Local demo action, not AI-generated. No background alerts or shared storage.",
+        "verification_status": "verified", "numbers_checked": report.numbers_checked,
+        "receipts": [], "team_id": team_id, "team_name": snapshot.name(team_id),
+        "data_source": snapshot.source, "data_as_of": snapshot.as_of,
+        "is_mock": snapshot.is_mock,
+        "forecast": None, "forecast_warning": None,
+        "impact": None, "impact_warning": None,
+        "model_note": "Local preferences only; no automatic notification service or shared user database.",
+        "action": action,
     }
