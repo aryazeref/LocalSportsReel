@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from .liiga_api import _dataset, current_season
 from .prediction.service import PredictionUnavailable, get_predictions, get_impact
 from .services.companion_bridge import build_companion_snapshot, companion_response, team_options
+from .services.companion_ai import companion_ai_status
 
 router = APIRouter(prefix="/api/companion", tags=["Fan companion"])
 
@@ -72,6 +73,8 @@ class CompanionResponse(BaseModel):
     kind: Literal["chat", "brief", "podcast"]
     text: str
     engine: str
+    generation_mode: Literal["ai", "offline", "fallback"]
+    mode_message: str
     verification_status: Literal["verified", "corrected", "redacted"]
     numbers_checked: int
     receipts: list[Receipt]
@@ -85,6 +88,12 @@ class CompanionResponse(BaseModel):
     impact: CompanionImpact | None = None
     impact_warning: str | None = None
     model_note: str
+
+
+@router.get("/status")
+async def companion_status():
+    """Reveal AI readiness without returning private API keys."""
+    return companion_ai_status()
 
 
 @router.get("/teams")

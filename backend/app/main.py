@@ -1,5 +1,12 @@
 """HTTP API. Try http://localhost:8000/docs for interactive API documentation."""
 import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load backend/.env for ordinary uvicorn commands, including PowerShell.
+# Values already set in the process environment always take precedence.
+load_dotenv(Path(__file__).resolve().parents[1] / ".env", override=False)
+
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from .agent import build_feed, create_story
