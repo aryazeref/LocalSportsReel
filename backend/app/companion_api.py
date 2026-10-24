@@ -139,6 +139,36 @@ async def get_companion_teams(
     }
 
 
+@router.get("/overview")
+async def get_team_overview(
+    team_id: str = Query(min_length=1, max_length=100),
+    season: int | None = Query(default=None, ge=2000, le=2100),
+):
+    """A concise *real data* team summary for the Companion welcome screen.
+
+    Do not invent a playoff-qualification percentage. Predictions remain in
+    the separately evaluated /api/liiga/predictions service.
+    """
+    chosen = season or current_season()
+    dataset = await _dataset(chosen)
+    snapshot = build_companion_snapshot(dataset)
+    if team_id not in snapshot.teams:
+        raise HTTPException(status_code=404, detail="Selected team is not available.")
+    use_league(FORMATS["liiga"])
+    facts = build_team_facts(snapshot, team_id, None)
+    return {
+        "team_id": team_id,
+        "name": snapshot.name(team_id),
+        "rank": facts.v("rank"),
+        "points": facts.v("points"),
+        "games_played": facts.v("gp"),
+        "points_gap": facts.v("gap6"),
+        "next_game": facts.v("next_game") if facts.has("next_game") else None,
+        "data_source": snapshot.source,
+        "data_as_of": snapshot.as_of,
+    }
+
+
 @router.post("/respond", response_model=CompanionResponse)
 async def respond(payload: CompanionRequest):
     if payload.kind == "chat" and not payload.message.strip():
