@@ -47,7 +47,7 @@ function Answer({ reply }: { reply: CompanionReply }) {
       <span>Facts: {reply.verification_status}</span>
     </div>
     <p className={styles.muted}>{reply.mode_message}</p>
-    {reply.forecast_warning && <p className={styles.muted}>{reply.forecast_warning}</p>
+    {reply.forecast_warning && <p className={styles.muted}>{reply.forecast_warning}</p>}
     {reply.impact_warning && <p className={styles.muted}>{reply.impact_warning}</p>}
     {reply.impact && <div className={styles.forecastPreview}>
       <strong>What-if: expected season points</strong>
@@ -57,7 +57,7 @@ function Answer({ reply }: { reply: CompanionReply }) {
         {outcome.outcome.replaceAll("_", " ")}: {outcome.expected_points.toFixed(1)} expected points
         {" "}({outcome.delta_points > 0 ? "+" : ""}{outcome.delta_points.toFixed(1)} vs baseline)
       </p>)}
-      <Link href="/predictions">See scenario assumptions and limitations ↗</Link>
+      <Link href="/predictions">Explore match predictions ↗</Link>
     </div>}
     {reply.forecast && <div className={styles.forecastPreview}>
       <strong>Experimental forecast · {reply.forecast.model}</strong>
