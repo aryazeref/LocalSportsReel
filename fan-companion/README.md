@@ -3,7 +3,7 @@
 An AI companion that lives a fan's season with them. It is built on three ideas:
 
 1. **Personal and proactive**: it knows your team, your favourite player and your predictions. It pings you live during the game and sends a daily audio brief.
-2. **Explains what's at stake**: a season simulator answers questions like "what do we need for a top-6 finish?" and "what does tonight's game change?"
+2. **Explains what's at stake**: a season simulator answers questions like "what do we need for a top-4 finish?" and "what does tonight's game change?"
 3. **Never lies about numbers (fact receipts)**: every number the AI writes must cite a fact ID. An automatic checker blocks anything that doesn't match the data before the fan sees it.
 
 ## Run it
@@ -14,7 +14,7 @@ cp .env.example .env        # optional: add an API key for full AI answers
 streamlit run app.py
 ```
 
-Without an API key, the app uses offline templates. They follow the same fact-citing rules, so the demo always works. Add `GEMINI_API_KEY`, `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` to `.env` for fluent AI answers, personas and Finnish.
+Without an API key, the app uses offline templates. They follow the same fact-citing rules, so the demo always works. Add `GEMINI_API_KEY`, `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` to `.env` (or the app's Streamlit secrets) for fluent AI answers and Finnish.
 
 Run the reliability tests with `python -m pytest -q`.
 
@@ -22,10 +22,10 @@ Run the reliability tests with `python -m pytest -q`.
 
 | Tab | What it shows |
 |---|---|
-| 💬 Companion | Chat in three personas (Superfan buddy, Calm analyst, Bettor's notebook). Every number has a hoverable fact chip and a receipts table. |
-| 🏒 Game night | Prediction, alerts, then tonight's game event by event with live pings. At the final whistle, the season is re-simulated: post-game recap, odds shift, prediction verdict and triggered alerts. |
-| 📈 Playoff race | Table with top-6, play-in and miss-playoff probabilities for every team, plus your team's finishing-position distribution. |
-| 🎧 Daily brief | A 60-second game-day brief with a labelled sponsor slot, read aloud in the browser. |
+| Chat | An AI agent with a friendly superfan voice. It answers questions, and can also act: make today's podcast, save your score prediction, set an alert. Every number has a hoverable fact chip and a receipts table. It doesn't do betting. |
+| Tonight | Your next game, what a win or loss does to your top-4 chance, your prediction and alerts, plus a simulated preview of the game event by event. At the final whistle the season is re-simulated: recap, chance shift, prediction verdict and triggered alerts. |
+| Table | The live table with top-4 (straight to the quarter-finals), 5th–12th (first playoff round) and miss-playoff chances, plus your team's finishing-position chart. |
+| Podcast | A 1-minute brief or a full two-host episode (Aino the fan, Mikko the analyst) with a labelled sponsor slot. With a Gemini key it's voiced by Gemini's text-to-speech; otherwise by the browser's voices. |
 
 Sidebar toggle **"Demo: inject a hallucination"**: this corrupts one number in the AI's draft, so judges can watch the checker block it and regenerate the answer.
 
@@ -36,7 +36,7 @@ League data (mock or Liiga API)
    └─ stats.py        table, form, streaks, head-to-head, scorers   (plain code, no AI)
    └─ scenarios.py    10,000 simulated seasons → playoff odds, stakes of the next game
    └─ facts.py        every number becomes a fact: ID, label, value, source
-   └─ companion.py    LLM (or templates) writes in the chosen persona, citing [F12]
+   └─ companion.py    LLM (or templates) writes as a friendly superfan, citing [F12]
    └─ verify.py       every number must match a cited fact → else regenerate → else remove
    └─ app.py          labelled "AI-generated", with receipts
 ```
@@ -73,6 +73,32 @@ The adapter for the Liiga stats API (v1) is in `companion/data/providers.py` (`L
   - `Companion(...).brief(facts, sponsor)` gives the daily brief
   - `simulate(snapshot)` gives the playoff odds
 - If a teammate already pulls Liiga data, share one provider so both of you get the same numbers.
+
+## Design
+
+The app uses the **Siniristi** design system shared with Local SportsReel (`design/siniristi.css`, with a
+component sample in `design/example.html`): Finnish blue on light, white on deep blue for dark, Plus Jakarta
+Sans and IBM Plex Mono. Fans switch **Light / Dark / System** in the app menu (⋮). Streamlit's own widgets
+take their colours from `.streamlit/config.toml`; the app's custom HTML uses the same tokens from
+`companion/render.py`, and a small script keeps it in step with the chosen theme.
+
+## Sports
+
+The **Sport** dropdown in the sidebar picks the league. Everything sport-specific (points, draws, overtime and
+shootouts, tie-breaks, playoff format, periods/halves/quarters, discipline, wording) lives in `LeagueFormat` in
+`companion/config.py`; the rest of the app reads the active sport's rules.
+
+| Sport | League | Data |
+|---|---|---|
+| Ice hockey | Liiga | Real data from the Liiga API |
+| Football | Veikkausliiga | Demo season (`data/mock_football/`) |
+| Floorball | F-liiga | Demo season (`data/mock_floorball/`) |
+| Basketball | Korisliiga | Demo season (`data/mock_basketball/`), quarter scores only |
+| Bandy | Bandyliiga | Demo season (`data/mock_bandy/`) |
+
+Demo seasons use real Finnish club names with invented players and results, are labelled in the app, and are
+regenerated with `python -m companion.data.generate_mock`. Formats are simplified. To use a real feed, add a
+provider in `companion/data/providers.py` and point `get_provider(<sport>)` to it.
 
 ## Demo data
 

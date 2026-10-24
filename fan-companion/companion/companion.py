@@ -5,7 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from companion import offline
+from companion.config import LEAGUE
 from companion.facts import FactStore
+from companion.llm import explain
 from companion.verify import Report, redact, tamper, verify
 
 PERSONAS = {
@@ -13,9 +15,8 @@ PERSONAS = {
                                 "keeps it light, but never exaggerates the numbers."),
     "analyst": ("Calm analyst", "A clear, calm sports analyst. Explains what the numbers mean and why, "
                                 "no hype, no filler."),
-    "bettor": ("Bettor's notebook", "A neutral, data-first assistant for fans who follow betting. Focuses on form, "
-                                    "probabilities and stakes. Never recommends a bet, never quotes bookmaker odds, "
-                                    "and reminds the user to play responsibly when betting comes up."),
+    "stats": ("Stats geek", "A precise numbers enthusiast who loves trends, comparisons and probabilities. "
+                            "Dry wit, every claim backed by the data."),
 }
 LENGTHS = {"short": "2–3 sentences", "normal": "4–6 sentences", "long": "two short paragraphs"}
 
@@ -28,8 +29,22 @@ RULES = """RULES (the app automatically checks these; answers that break them ar
 3. If the FACTS don't cover the question (injuries, line-ups, transfers, news, other leagues), say plainly that
    you don't have that data. Never guess.
 4. Opinion, emotion and jokes are welcome, but only in sentences without numbers or factual claims about people.
-5. Never recommend a bet. Model probabilities are not betting odds.
+5. No betting: never give betting tips, odds or bet suggestions. If asked, say you don't do betting and offer
+   the data view of the game instead. Model probabilities are not betting odds.
 6. The 'fictional mock player' names are demo data: use them as given, invent nothing about them."""
+
+
+STYLE = """HOW TO TALK (sound like a real person, not a report):
+- Talk like a knowledgeable friend texting during the season: natural, warm, a bit of personality. Contractions
+  are fine. Vary how you start; never open with "Certainly", "Great question" or by repeating the question.
+- Answer the actual question first, then add the one or two facts that matter most. Don't list every fact.
+- Pick up on feelings: if the fan is nervous, gutted or hyped, acknowledge it in a few words, then help.
+- Use the conversation so far: don't repeat numbers you already gave unless asked, and build on what they said.
+- Use the fan's name now and then, not in every message. Never invent personal details.
+- You may end with one short, relevant follow-up question when it helps, not every time.
+- Plain sentences only: no headings, bullet lists or markdown. Keep it to the requested length.
+- If something isn't in the FACTS, say so naturally ("I don't have injury news, only league data") and offer
+  what you can answer instead."""
 
 
 @dataclass
@@ -60,8 +75,9 @@ class Companion:
         name, desc = PERSONAS[self.persona]
         user = f"The user's name is {self.user_name}. " if self.user_name else ""
         return (f"You are '{name}', an AI sports companion from Kaleva Media for a fan of {team} "
-                f"in Finland's Liiga. {desc}\n{user}Answer in {self.language}. Length: {LENGTHS.get(self.length)}.\n"
-                f"TASK: {task}\n\n{RULES}\n\nFACTS:\n{fs.prompt_block()}")
+                f"in Finland's {LEAGUE.name} ({LEAGUE.sport}). {desc}\n{user}Answer in {self.language}. "
+                f"Length: {LENGTHS.get(self.length)}.\nTASK: {task}\n\n{STYLE}\n\n{RULES}\n\n"
+                f"FACTS:\n{fs.prompt_block()}")
 
     def _run(self, fs: FactStore, team: str, task: str, messages: list[dict], fallback, kind: str,
              simulate_error: bool = False, max_tokens: int = 700) -> Reply:
@@ -73,9 +89,11 @@ class Companion:
             nonlocal engine
             if self.backend:
                 try:
-                    return self.backend.generate(system, msgs, max_tokens=max_tokens)
+                    out = self.backend.generate(system, msgs, max_tokens=max_tokens)
+                    engine = self.engine  # the backend may have switched to a backup model
+                    return out
                 except Exception as e:  # network / quota: keep the demo alive
-                    log.append(f"AI model unavailable ({type(e).__name__}), used offline templates.")
+                    log.append(f"AI model unavailable ({explain(e)}), used offline templates.")
                     engine = "Offline templates (fallback)"
             return fallback()
 
@@ -108,7 +126,7 @@ class Companion:
     # ---- public API -------------------------------------------------------
     def chat(self, fs: FactStore, history: list[dict], message: str, simulate_error=False) -> Reply:
         team = fs.v("team")
-        msgs = [m for m in history[-8:] if m["role"] in ("user", "assistant")]
+        msgs = [m for m in history[-12:] if m["role"] in ("user", "assistant") and m.get("content")]
         msgs = msgs + [{"role": "user", "content": message}]
         return self._run(fs, team, "Chat with the fan and answer their latest message.", msgs,
                          lambda: offline.chat(message, fs, self.persona, self.user_name), "chat", simulate_error)
@@ -122,6 +140,21 @@ class Companion:
                 "Short spoken sentences, one per line, no lists or markdown." + ad)
         return self._run(fs, team, task, [{"role": "user", "content": "Give me today's brief."}],
                          lambda: offline.brief(fs, self.persona, self.user_name, sponsor), "brief", simulate_error)
+
+    def podcast(self, fs: FactStore, sponsor: str = "", short: bool = False, simulate_error=False) -> Reply:
+        team = fs.v("team")
+        a, m = offline.HOSTS
+        ad = (f" Early on, {a} reads one clearly labelled ad line: '{a}: [Ad] This episode is presented by "
+              f"{sponsor}.'" if sponsor else "")
+        size = "about 60 seconds (8-10 lines)" if short else "about 2-3 minutes (18-24 lines)"
+        task = (f"Write a spoken podcast episode of {size} for today, as a dialogue between two hosts: {a}, an "
+                f"enthusiastic fan in the stands, and {m}, a calm analyst. Every line starts with the host's name "
+                f"and a colon ('{a}: ...'). Cover the last result, the table, form, tonight's opponent and what's "
+                f"at stake in the playoff race, and a player to watch. Natural spoken sentences, no markdown, "
+                f"no stage directions. Citations go at the end of sentences as usual." + ad)
+        return self._run(fs, team, task, [{"role": "user", "content": "Make today's podcast."}],
+                         lambda: offline.podcast(fs, sponsor, short), "podcast", simulate_error,
+                         max_tokens=1800)
 
     def ping(self, fs: FactStore, ev: dict, fav_team: str, use_ai: bool = False) -> Reply:
         if not use_ai:

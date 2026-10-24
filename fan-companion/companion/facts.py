@@ -5,12 +5,13 @@ writes matches a cited fact. Fact IDs become the 'fact receipts' in the UI.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 from companion.config import LEAGUE
 from companion.data.providers import Snapshot
 from companion.scenarios import ScenarioResult
-from companion.stats import (fmt_date, game_line, head_to_head, next_game, ordinal, scorers,
+from companion.stats import (fmt_date, game_line, head_to_head, league_scorers, next_game, ordinal, scorers,
                              standings, streak, team_results)
 
 
@@ -52,6 +53,14 @@ class FactStore:
         return "\n".join(f"{f.id} | {f.label}: {f.display}  (source: {f.source})" for f in self.facts.values())
 
 
+def stake_race(st: dict) -> tuple[str, float, float]:
+    """The race the next game can move: the top places, or the playoff line if the top is out of reach."""
+    D, P = LEAGUE.direct_spots, LEAGUE.playin_last
+    if P > D and max(st["top6_if_win"], st["top6_if_loss"]) < 0.02:
+        return f"top {P}", st["top10_if_win"], st["top10_if_loss"]
+    return f"top {D}", st["top6_if_win"], st["top6_if_loss"]
+
+
 def pct(x: float) -> str:
     p = round(100 * x)
     if p == 0 and x > 0:
@@ -74,16 +83,22 @@ def build_team_facts(snap: Snapshot, team: str, scen: ScenarioResult | None,
     mock_note = " (fictional mock player)" if snap.is_mock else ""
 
     fs.add("team", "User's favourite team", T, "Your profile")
-    fs.add("format", "Playoff format",
-           f"Top {LEAGUE.direct_spots} go straight to the quarter-finals; {LEAGUE.direct_spots + 1}th–"
-           f"{LEAGUE.playin_last}th play a play-in round; {LEAGUE.playin_last + 1}th–{len(rows)}th miss the playoffs",
-           "Liiga regular-season rules")
+    D, P = LEAGUE.direct_spots, LEAGUE.playin_last
+    middle = f"{D + 1}th–{P}th play the {LEAGUE.first_round}; " if P > D else ""
+    fs.add("format", "Season format",
+           f"Top {D} go {LEAGUE.direct_goal}; {middle}{P + 1}th–{len(rows)}th {LEAGUE.out_label}",
+           f"{LEAGUE.name} rules")
     fs.add("rank", f"{T} league position", ordinal(row.rank), src_calc)
     fs.add("points", f"{T} points", row.pts, src_calc)
     fs.add("gp", f"{T} games played", row.gp, src_calc)
-    fs.add("record", f"{T} record (W–OTW–OTL–L)", f"{row.w}–{row.otw}–{row.otl}–{row.l}", src_calc)
-    fs.add("goals", f"{T} goals for–against", f"{row.gf}–{row.ga}", src_calc)
-    fs.add("gd", f"{T} goal difference", f"{row.gd:+d}", src_calc)
+    if LEAGUE.draws:
+        fs.add("record", f"{T} record (W–D–L)", f"{row.w}–{row.d}–{row.l}", src_calc)
+    elif LEAGUE.points_ot_win == LEAGUE.points_reg_win:   # e.g. basketball: a win is a win
+        fs.add("record", f"{T} record (W–L)", f"{row.w + row.otw}–{row.l + row.otl}", src_calc)
+    else:
+        fs.add("record", f"{T} record (W–OTW–OTL–L)", f"{row.w}–{row.otw}–{row.otl}–{row.l}", src_calc)
+    fs.add("goals", f"{T} {LEAGUE.score_word}s for–against", f"{row.gf}–{row.ga}", src_calc)
+    fs.add("gd", f"{T} {LEAGUE.score_word} difference", f"{row.gd:+d}", src_calc)
 
     results = team_results(snap, team)
     if results:
@@ -92,9 +107,10 @@ def build_team_facts(snap: Snapshot, team: str, scen: ScenarioResult | None,
                ", ".join(r["outcome"] for r in last5), src_data)
         fs.add("form5_pts", f"{T} points from last {len(last5)} games", sum(r["points"] for r in last5), src_calc)
         kind, n = streak(results)
-        streak_txt = (("won the last game" if kind == "win" else "lost the last game") if n == 1
-                      else f"{n} {'wins' if kind == 'win' else 'losses'} in a row")
-        fs.add("streak", f"{T} current streak (OT results count as wins/losses)", streak_txt, src_calc)
+        streak_txt = ({"win": "won the last game", "draw": "drew the last game", "loss": "lost the last game"}[kind]
+                      if n == 1 else f"{n} {dict(win='wins', draw='draws', loss='losses')[kind]} in a row")
+        fs.add("streak", f"{T} current streak" + ("" if LEAGUE.draws else " (OT results count as wins/losses)"),
+               streak_txt, src_calc)
         fs.add("last_game", f"{T} last game", game_line(snap, results[-1]["game"]), src_data)
 
     leader = rows[0]
@@ -124,8 +140,11 @@ def build_team_facts(snap: Snapshot, team: str, scen: ScenarioResult | None,
         h2h = head_to_head(snap, team, opp)
         if h2h:
             w = sum(r["won"] for r in h2h)
+            d = sum(r["outcome"] == "D" for r in h2h)
+            lost = len(h2h) - w - d
+            draws = f", {d} draw{'s' if d != 1 else ''}" if LEAGUE.draws else ""
             fs.add("h2h", f"{T} vs {O} this season",
-                   f"{w} win{'s' if w != 1 else ''}, {len(h2h) - w} loss{'es' if len(h2h) - w != 1 else ''} "
+                   f"{w} win{'s' if w != 1 else ''}{draws}, {lost} loss{'es' if lost != 1 else ''} "
                    f"(last: {game_line(snap, h2h[-1]['game'])})", src_data)
         else:
             fs.add("h2h", f"{T} vs {O} this season", "first meeting this season", src_data)
@@ -138,17 +157,41 @@ def build_team_facts(snap: Snapshot, team: str, scen: ScenarioResult | None,
         fs.add("top_points", f"{T} points leader{mock_note}",
                f"{top_p['name']}, {top_p['pts']} points ({top_p['g']} goals + {top_p['a']} assists)", src_calc)
 
+    # More context, so the companion can answer follow-ups without guessing
+    if results:
+        home_r = [r for r in results if r["home"]]
+        away_r = [r for r in results if not r["home"]]
+        for key, label, rs in (("home_form", "home", home_r), ("away_form", "away", away_r)):
+            if rs:
+                fs.add(key, f"{T} {label} record this season",
+                       f"{sum(r['points'] for r in rs)} points from {len(rs)} {label} games", src_calc)
+        fs.add("per_game", f"{T} {LEAGUE.score_word}s per game (for / against)",
+               f"{row.gf / row.gp:.1f} / {row.ga / row.gp:.1f}", src_calc)
+        fs.add("last5_games", f"{T} last {len(results[-5:])} games (newest first)",
+               "; ".join(game_line(snap, r["game"]) for r in reversed(results[-5:])), src_data)
+    upcoming = sorted((x for x in snap.games if x["status"] != "final" and team in (x["home"], x["away"])),
+                      key=lambda x: (x["date"], x["time"]))[:3]
+    if upcoming:
+        fs.add("upcoming", f"{T} next {len(upcoming)} games", "; ".join(
+            f"{'vs' if x['home'] == team else 'at'} {snap.name(x['away'] if x['home'] == team else x['home'])} "
+            f"{fmt_date(x['date'])} {x['time']}" for x in upcoming), f"{snap.source} · fixtures")
+    fs.add("table", "League table (position, team, points)",
+           ", ".join(f"{ordinal(r.rank)} {r.name} {r.pts}" for r in rows), src_calc)
+    league = league_scorers(snap)[:3]
+    if league:
+        fs.add("league_scorers", f"League top goalscorers{mock_note}",
+               "; ".join(f"{p['name']} ({snap.name(p['team'])}) {p['g']} goals" for p in league), src_calc)
+
     remaining = sum(1 for x in snap.games if x["status"] != "final" and team in (x["home"], x["away"]))
     fs.add("remaining", f"{T} regular-season games left", remaining, f"{snap.source} · fixtures")
 
     if scen:
-        fs.add("p_top6", f"{T} chance of a top-{LEAGUE.direct_spots} finish (direct quarter-final)",
-               pct(scen.p_top6[team]), src_sim)
-        fs.add("p_playin", f"{T} chance of finishing {LEAGUE.direct_spots + 1}th–{LEAGUE.playin_last}th (play-in)",
-               pct(scen.p_playin[team]), src_sim)
-        fs.add("p_top10", f"{T} chance of reaching the playoffs incl. play-in (top {LEAGUE.playin_last})",
-               pct(scen.p_top10[team]), src_sim)
-        fs.add("p_out", f"{T} chance of missing the playoffs", pct(scen.p_out[team]), src_sim)
+        fs.add("p_top6", f"{T} chance of a top-{D} finish ({LEAGUE.direct_goal})", pct(scen.p_top6[team]), src_sim)
+        if P > D:
+            fs.add("p_playin", f"{T} chance of finishing {D + 1}th–{P}th ({LEAGUE.first_round})",
+                   pct(scen.p_playin[team]), src_sim)
+            fs.add("p_top10", f"{T} chance to {LEAGUE.reach_goal} (top {P})", pct(scen.p_top10[team]), src_sim)
+        fs.add("p_out", f"{T} chance to {LEAGUE.out_label}", pct(scen.p_out[team]), src_sim)
         fs.add("p_first", f"{T} chance of finishing 1st", pct(scen.p_first[team]), src_sim)
         fs.add("proj_points", f"{T} projected final points (median)", round(scen.proj_points[team]), src_sim)
         fs.add("cutline", f"Projected final points of the {ordinal(LEAGUE.direct_spots)}-placed team (median)",
@@ -157,13 +200,20 @@ def build_team_facts(snap: Snapshot, team: str, scen: ScenarioResult | None,
         if st:
             fs.add("p_win_next", f"Model's win probability for {T} next game (not betting odds)",
                    pct(st["p_win"]), src_sim)
-            fs.add("stake_win", f"{T} top-{LEAGUE.direct_spots} chance if they win the next game",
-                   pct(st["top6_if_win"]), src_sim)
-            fs.add("stake_loss", f"{T} top-{LEAGUE.direct_spots} chance if they lose the next game (incl. OT/SO)",
-                   pct(st["top6_if_loss"]), src_sim)
-            swing = round(100 * st["top6_if_win"]) - round(100 * st["top6_if_loss"])
-            fs.add("stake_swing", f"Swing in {T} top-{LEAGUE.direct_spots} chance riding on the next game",
-                   f"{swing} percentage point{'' if abs(swing) == 1 else 's'}", src_sim)
+            race, win, loss = stake_race(st)
+            fs.add("stake_race", "Race the next game is about", race, src_sim)
+            if abs(round(100 * win) - round(100 * loss)) < 1:   # tonight can't move it
+                fs.add("stake_flat", f"{T} {race} chance whatever the next game's result "
+                       f"({'out of reach' if win < 0.5 else 'almost certain'})", pct(win), src_sim)
+            else:
+                fs.add("stake_win", f"{T} {race} chance if they win the next game", pct(win), src_sim)
+                fs.add("stake_loss", f"{T} {race} chance if they "
+                       + ("don't win the next game (draw or loss)" if LEAGUE.draws else
+                          "lose the next game (incl. OT/SO)"),
+                       pct(loss), src_sim)
+                swing = round(100 * win) - round(100 * loss)
+                fs.add("stake_swing", f"Swing in {T} {race} chance riding on the next game",
+                       f"{swing} percentage point{'' if abs(swing) == 1 else 's'}", src_sim)
 
     if profile:
         if profile.get("fan_since"):
@@ -175,3 +225,46 @@ def build_team_facts(snap: Snapshot, team: str, scen: ScenarioResult | None,
             fs.add("prediction", "User's prediction for the next game",
                    f"{snap.name(g['home'])} {pred['home']}–{pred['away']} {snap.name(g['away'])}", "Your profile")
     return fs
+
+
+def find_teams(snap: Snapshot, message: str, exclude: str = "") -> list[str]:
+    """Teams the fan mentions by name (or id), e.g. "how about Tappara?"."""
+    m = message.lower()
+    found = []
+    for tid, t in snap.teams.items():
+        if tid == exclude:
+            continue
+        names = {t["name"].lower(), tid.lower()}
+        if any(re.search(rf"(?<![\w]){re.escape(n)}(?![\w])", m) for n in names if len(n) >= 3):
+            found.append(tid)
+    return found[:2]
+
+
+def add_team_facts(fs: FactStore, snap: Snapshot, team: str, other: str, scen: ScenarioResult | None) -> None:
+    """Facts about another team the fan asked about, compared with their own team."""
+    rows = standings(snap)
+    r = next(x for x in rows if x.team == other)
+    O, T = snap.name(other), snap.name(team)
+    src = f"Computed from {snap.source} results up to {fmt_date(snap.as_of)}"
+    k = f"x_{other.lower()}"
+    fs.add(f"{k}_rank", f"{O} league position and points", f"{ordinal(r.rank)}, {r.pts} points from {r.gp} games",
+           src)
+    fs.add(f"{k}_gd", f"{O} {LEAGUE.score_word}s for–against", f"{r.gf}–{r.ga} ({r.gd:+d})", src)
+    res = team_results(snap, other)
+    if res:
+        fs.add(f"{k}_form", f"{O} last {len(res[-5:])} results (oldest→newest)",
+               ", ".join(x["outcome"] for x in res[-5:]), src)
+    h2h = head_to_head(snap, team, other)
+    if h2h:
+        w = sum(x["won"] for x in h2h)
+        d = sum(x["outcome"] == "D" for x in h2h)
+        fs.add(f"{k}_h2h", f"{T} vs {O} this season",
+               f"{w} win{'s' if w != 1 else ''}"
+               + (f", {d} draw{'s' if d != 1 else ''}" if LEAGUE.draws else "")
+               + f", {len(h2h) - w - d} loss{'es' if len(h2h) - w - d != 1 else ''}"
+               f" (last: {game_line(snap, h2h[-1]['game'])})", src)
+    else:
+        fs.add(f"{k}_h2h", f"{T} vs {O} this season", "no meetings yet this season", src)
+    if scen:
+        fs.add(f"{k}_top", f"{O} chance of a top-{LEAGUE.direct_spots} finish", pct(scen.p_top6[other]),
+               f"Season simulation · {scen.n:,} runs")

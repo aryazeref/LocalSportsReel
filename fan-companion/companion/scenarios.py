@@ -28,7 +28,7 @@ class ScenarioResult:
     p_first: dict[str, float]
     proj_points: dict[str, float]
     rank_dist: dict[str, list[float]]          # P(final rank = 1..N)
-    cutline_median: float                       # final points of the 6th-placed team
+    cutline_median: float                       # final points of the last direct quarter-final place
     cutline_range: tuple[float, float]          # 25th-75th percentile
     stakes: dict[str, dict] = field(default_factory=dict)
 
@@ -77,6 +77,17 @@ def simulate(snap: Snapshot, n: int = SIMULATIONS, seed: int = 7) -> ScenarioRes
         la = avg * att_s[:, a] * dfn_s[:, h]
         gh, ga_ = rng.poisson(lh, n), rng.poisson(la, n)
         tie = gh == ga_
+        if LEAGUE.draws:   # football: a level game is a draw, one point each
+            home_reg = gh > ga_
+            pts[:, h] += np.where(home_reg, LEAGUE.points_reg_win, np.where(tie, LEAGUE.points_draw, 0))
+            pts[:, a] += np.where(gh < ga_, LEAGUE.points_reg_win, np.where(tie, LEAGUE.points_draw, 0))
+            gd[:, h] += gh - ga_
+            gd[:, a] -= gh - ga_
+            if nxt[g["home"]] == g["id"]:
+                won_next[g["home"]] = home_reg
+            if nxt[g["away"]] == g["id"]:
+                won_next[g["away"]] = gh < ga_
+            continue
         home_ot = rng.random(n) < (0.5 + 0.15 * (lh - la) / (lh + la))
         home_reg, away_reg = gh > ga_, gh < ga_
         pts[:, h] += np.where(home_reg, LEAGUE.points_reg_win,
