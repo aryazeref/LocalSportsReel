@@ -4,7 +4,7 @@
  * Video rights and video files are a separate layer. A goal marker or a
  * provider's "has_video" boolean is NOT permission to re-publish the clip.
  */
-import type { DiscoveryGame, DiscoveryResponse } from "./liiga-discovery";
+import type { DiscoveryResponse } from "./liiga-discovery";
 import { approvedReelVideo } from "./reel-media";
 
 export type Reel = {
