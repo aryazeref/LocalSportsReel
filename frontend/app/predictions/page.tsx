@@ -293,7 +293,7 @@ export default function PredictionsPage() {
             </button>)}
           </div>
 
-          {historicalTable && activeImpact && <div role="status" className={styles.snapshotNotice}>
+          {(showingSnapshot || activeImpact?.standings_basis === "completed_results_snapshot") && activeImpact && <div role="status" className={styles.snapshotNotice}>
             <strong>{showingSnapshot ? "Last saved calculation · not live standings" : "Pre-game standings snapshot · not live standings"}</strong>
             <p>Showing an earlier pre-match estimate from {dateLabel(activeImpact.generated_at)}. It may not reflect the latest results.</p>
             {showingSnapshot && <>
