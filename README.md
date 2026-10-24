@@ -2,7 +2,7 @@
 
 **Pitch:** Discover the best sports moments happening nearby, even if you don't normally follow a league. A bounded agent discovers and ranks local structured match events, validates provenance, and creates a short grounded story.
 
-> **Important:** This starter uses fictional athletes, teams, results, and match events. It contains *no real video clips*, *no location tracking*, and *no live Liiga connection*. Do not publish sample stories as real news.
+> **Data sources:** The homepage remains a fictional sports-story demo. The separate `/liiga` page fetches real Liiga fixtures and results and displays backend-calculated team statistics. No real video clips or location tracking are included. Do not publish sample stories from the homepage as real news.
 
 ## What works in this first milestone
 
@@ -12,6 +12,7 @@
 - Story generation from facts, with an optional AI-assisted draft mode.
 - Browser UI with interactive local moment cards and traceable evidence.
 - Automated backend tests, mock data, and interactive API documentation.
+- Real Liiga match cards, season/team filters, goals, goal difference, historical win percentage, and recent form on `/liiga`.
 
 ## Step 1 — Get your tools ready
 
@@ -49,7 +50,7 @@ python -m pytest -q
 In a **second terminal**, enter `local-sportsreel/frontend`:
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
@@ -58,6 +59,57 @@ Open <http://localhost:3000>. The browser calls the Python API at `http://localh
 ```ini
 NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
 ```
+
+## Try the real Liiga integration
+
+With both servers running, navigate to `/liiga` in the frontend. Select a season
+and team to see fixtures and statistics calculated by FastAPI. The default is
+the current Helsinki season, identified by its ending year (2027 means 2026–27;
+the automatic default switches in July). Older seasons can be selected too.
+
+The backend calls `https://prod.liiga-backend.liiga.fi/stats/api/v1/games`
+with `season` and `serie=RUNKOSARJA`. No API key is required by the current public
+endpoint. Set `LIIGA_API_BASE_URL` in the backend process only if the provider's
+base URL changes. The default works without a local environment file. Match
+and analysis endpoints share a per-process, 120-second cache. “Refresh” reloads
+the page data; it may still receive a cached dataset until that expires. The
+displayed fetch timestamp does not change on a cache hit.
+
+Useful backend endpoints (also available in `/docs`):
+
+- `GET /api/liiga/games?season=2027&limit=12`: a chronological match shortlist.
+  Optional `team_id` and `from_date=YYYY-MM-DD` filters apply before the display
+  limit. Current-season cards start seven days ago; other seasons start in July
+  of the preceding year. This date window affects cards only.
+- `GET /api/liiga/analysis?season=2027`: all teams' calculated statistics.
+- `GET /api/liiga/teams/{team_id}/analysis?season=2027`: one team's statistics.
+  Use the provider's complete team ID, for example `238306801:jokerit`.
+
+Calculations use **all regular-season games returned by the provider**, without
+the card limit or recent-date window. The documented v1 response has no page,
+cursor, or total field, so independent completeness cannot be guaranteed. Only
+completed results with valid scores and distinct team IDs count. Cancelled,
+live, and upcoming games do not count. Unusable completed results are reported
+as excluded. Wins include overtime and shootouts; recent form shows up to five
+results, newest first. Teams without completed games have no win percentage.
+
+These are descriptive statistics, **not official standings or win predictions**.
+Points, competition tie-breakers, ML predictions, and “if they win” scenarios
+are not implemented yet. Provider failures appear as errors; real-data routes
+never substitute the fictional demo data or `json_data.json`.
+
+The implementation is split into:
+
+- `backend/app/services/liiga_client.py`: fetching, validation, normalization, cache.
+- `backend/app/services/liiga_analysis.py`: team calculations independent of HTTP.
+- `backend/app/liiga_api.py`: FastAPI routes and request validation.
+- `backend/app/models.py`: typed API responses.
+- `frontend/app/liiga/page.tsx`: match and analysis interface.
+
+Run regression tests **from `backend`** with `python -m pytest -q`, and validate
+the frontend from `frontend` with `npm run build`. The root `test_liiga.py` is
+a manual API exploration script that writes `json_data.json`; it is not the
+automated test suite.
 
 ## Step 4 — See how the agent works
 

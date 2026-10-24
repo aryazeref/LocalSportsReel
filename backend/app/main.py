@@ -5,8 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .agent import build_feed, create_story
 from .data import CITIES
 from .models import FeedResponse, Story
-
-
+from .liiga_api import router as liiga_router
 
 app = FastAPI(title="Local SportsReel API", version="0.1.0")
 origins = os.getenv("FRONTEND_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000")
@@ -16,6 +15,7 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type"],
 )
+app.include_router(liiga_router)
 
 
 @app.get("/api/health")
@@ -45,8 +45,3 @@ def story(moment_id: str):
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    
-# Import the router that communicates with the Liiga API.
-from .liiga_api import router as liiga_router
-# Register its endpoints with our existing FastAPI application.
-app.include_router(liiga_router)
