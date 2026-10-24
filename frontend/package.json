@@ -9,7 +9,8 @@
     "lint": "eslint . --max-warnings=0",
     "test:snapshots": "tsx --test tests/impact-snapshot.test.ts",
     "test:entitlements": "tsx --test tests/entitlements.test.ts",
-    "test": "npm run test:snapshots && npm run test:entitlements"
+    "test:reels": "tsx --test tests/reels.test.ts",
+    "test": "npm run test:snapshots && npm run test:entitlements && npm run test:reels"
   },
   "dependencies": {
     "@fontsource-variable/plus-jakarta-sans": "^5.3.0",
