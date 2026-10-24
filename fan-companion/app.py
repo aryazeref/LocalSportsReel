@@ -7,6 +7,8 @@ from __future__ import annotations
 import html
 import json
 import os
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import streamlit as st
@@ -32,14 +34,19 @@ st.markdown(CSS, unsafe_allow_html=True)
 
 
 # ---------- cached data ----------------------------------------------------
-@st.cache_data(show_spinner="Loading league data…")
+# Live data is re-fetched every few minutes so new results show up without a restart.
+REFRESH_MINUTES = int(os.getenv("COMPANION_REFRESH_MINUTES", "10"))
+
+
+@st.cache_data(show_spinner="Loading league data…", ttl=REFRESH_MINUTES * 60)
 def load_snapshot(source: str):
-    return get_provider(source).snapshot()
+    return get_provider(source).snapshot(), datetime.now(ZoneInfo("Europe/Helsinki"))
 
 
-@st.cache_data(show_spinner="Simulating the rest of the season…")
-def season_odds(source: str):
-    return simulate(load_snapshot(source))
+@st.cache_data(show_spinner="Simulating the rest of the season…", max_entries=4)
+def season_odds(source: str, results_key: str, _snap):
+    """Re-simulated only when a result changes (results_key), not on every data refresh."""
+    return simulate(_snap)
 
 
 @st.cache_resource
@@ -74,19 +81,25 @@ def render_reply(reply, receipts: bool = True):
 # Real Liiga data only. COMPANION_DATA=mock is kept for offline development and tests.
 source = os.getenv("COMPANION_DATA", "liiga").lower()
 try:
-    snap = load_snapshot(source)
+    snap, fetched_at = load_snapshot(source)
 except Exception as e:  # API unreachable or changed
     st.error(f"Could not load data from the Liiga API: {e}")
     st.caption("Check that this computer or server can reach the Liiga API (try `python probe_api.py`), "
                "then reload the page.")
     st.stop()
-odds = season_odds(source)
+results_key = "|".join(f"{g['id']}:{g['home_goals']}-{g['away_goals']}{g['decided']}"
+                       for g in snap.games if g["status"] == "final")
+odds = season_odds(source, results_key, snap)
 
 # ---------- sidebar --------------------------------------------------------
 with st.sidebar:
     st.markdown('<div class="brand"><span class="brand-mark">↗</span><span>FAN<span class="brand-thin">'
                 'COMPANION</span><span class="dot">.</span></span></div>', unsafe_allow_html=True)
-    st.caption(f"Kaleva Media · AI sports companion prototype · Data: {snap.source}")
+    st.caption(f"Kaleva Media · AI sports companion prototype · Data: {snap.source}, "
+               f"updated {fetched_at:%H:%M} (every {REFRESH_MINUTES} min)")
+    if st.button("↻ Refresh data now", width="stretch"):
+        load_snapshot.clear()
+        st.rerun()
 
     team_ids = sorted(snap.teams, key=snap.name)
     prof["name"] = st.text_input("Your name", prof.get("name", ""))

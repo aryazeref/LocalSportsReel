@@ -60,7 +60,7 @@ The adapter for the Liiga stats API (v1) is in `companion/data/providers.py` (`L
 1. In `.env`, set `LIIGA_API_BASE` (default `https://prod.liiga-backend.liiga.fi/stats`), `LIIGA_API_KEY` (sent as the `x-api-key` header) and `LIIGA_SEASON` (the year the season ends: 2026–27 is `2027`). The API is only reachable from the network where its Swagger page opens.
 2. Run `python probe_api.py`. It finds the base URL that answers and saves sample responses to `api_samples/`.
 3. Run `python check_standings.py`. It compares the table computed from real results with the official Liiga table.
-4. Run `streamlit run app.py`. The app uses real Liiga data only; if the API can't be reached it shows the error instead of the app. Set `COMPANION_DATA=mock` in `.env` to work offline with the fictional demo season.
+4. Run `streamlit run app.py`. The app uses real Liiga data only; if the API can't be reached it shows the error instead of the app. Set `COMPANION_DATA=mock` in `.env` to work offline with the fictional demo season. Data is re-fetched every 10 minutes (`COMPANION_REFRESH_MINUTES`), and the sidebar has a "Refresh data now" button.
 
 `tests/test_liiga_api.py` checks the mapping against responses shaped like the API docs, including overtime, shootouts and cancelled games.
 
