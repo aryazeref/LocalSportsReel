@@ -157,7 +157,7 @@ def companion_response(
         and re.search(r"\\b(predict|probabilit|chances?|forecast|win|lose|tonight|next match|what if)\\b",
                       message, re.IGNORECASE)
     ):
-        output += ("\\n\\nExperimental pre-match forecast: "
+        output += ("\n\nExperimental pre-match forecast: "
                    + forecast.home_team.name + " " + home_pct + " to win "
                    + facts.c("forecast_home") + "; "
                    + forecast.away_team.name + " " + away_pct + " to win "
