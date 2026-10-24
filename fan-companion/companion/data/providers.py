@@ -88,9 +88,7 @@ class LiigaApiProvider:
         self.base = (os.getenv("LIIGA_API_BASE") or DEFAULT_BASE).rstrip("/")
         self.key = os.getenv("LIIGA_API_KEY", "")
         self.season = int(os.getenv("LIIGA_SEASON") or 2027)
-        self._get_override = get          # tests pass a fake here
-        if not self.key and get is None:
-            raise RuntimeError("LIIGA_API_KEY is not set in .env")
+        self._get_override = get          # tests pass a fake here; the key is optional (sent only if set)
 
     def _get(self, path: str, **params):
         if self._get_override:
