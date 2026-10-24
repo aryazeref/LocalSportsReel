@@ -91,6 +91,8 @@ class LiigaGame(BaseModel):
     venue: str | None = None
     city: str | None = None
     goal_events: list[LiigaGoalEvent] = Field(default_factory=list)
+    # Preserve regulation/overtime/shootout classification for companion standings.
+    finished_type: str | None = None
 
 
 class LiigaDatasetMetadata(BaseModel):
