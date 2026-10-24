@@ -24,6 +24,20 @@ export type CompanionForecast = {
   model: string;
   warnings: string[];
 };
+export type CompanionImpact = {
+  game_id: number;
+  model: string;
+  scope: "regular_season_points";
+  top_n: number;
+  outcomes: {
+    outcome: string;
+    expected_points: number;
+    delta_points: number;
+    expected_rank: number;
+  }[];
+  limitations: string[];
+  warnings: string[];
+};
 export type CompanionReply = {
   kind: "chat" | "brief" | "podcast";
   text: string;
@@ -38,6 +52,8 @@ export type CompanionReply = {
   is_mock: boolean;
   forecast: CompanionForecast | null;
   forecast_warning: string | null;
+  impact: CompanionImpact | null;
+  impact_warning: string | null;
   model_note: string;
 };
 export type ChatMessage = {
