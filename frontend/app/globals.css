@@ -241,3 +241,14 @@ h1, h2, h3, p { margin-top: 0; }
 .visionLinks { display:flex; flex-wrap:wrap; gap:12px; margin-top:22px; }
 .visionLinks a { padding:9px 13px; border-radius:var(--r-pill); border:1px solid currentColor; color:var(--on-primary); text-decoration:none; font-size:12px; font-weight:800; }
 .visionLinks a:hover { background:var(--team); color:var(--team-ink); }
+
+/* Hero is deliberately shorter so the reel player starts above the fold. */
+.reelHero { min-height:340px; }
+.reelHero .heroText { padding:39px 0; }
+.reelHero .heroGraphic { top:-34px; opacity:.55; }
+.reelHero .hero h1 { margin:16px 0; }
+.reelHero + .discover { padding-top:33px; }
+@media(max-width:680px) {
+  .reelHero { min-height:310px; }
+  .reelHero .heroText { padding:35px 0; }
+}
