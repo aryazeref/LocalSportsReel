@@ -15,12 +15,12 @@ export default function Paywall({ matchup, onUnlockReport, onGetPremium }: Paywa
       <span className={styles.label}>ADVANCED REPORT PREVIEW</span><span className={styles.price}>€0.49</span></div>
     <h3 id="report-preview-title">Unlock the full report</h3>
     <p className={styles.matchup}>{matchup}</p>
-    <p className={styles.description}>Your free view includes the basic match winner probabilities. The existing advanced analysis for this match includes:</p>
+    <p className={styles.description}>Your free view includes the basic match winner probabilities. Unlock the deeper match view, including:</p>
     <ul>
       <li>Regulation and overtime probability breakdown</li>
-      <li>Forecast factors and available team-history context</li>
-      <li>Four outcome comparisons in the league-impact simulation</li>
-      <li>Model methodology, historical evaluation and limitations</li>
+      <li>How the two teams’ season projections change</li>
+      <li>What a win or loss means for other clubs</li>
+      <li>A clear summary of potential league position changes</li>
     </ul>
     <p className={styles.note}>The report appears only when the relevant data is available. Forecasts are experimental, uncertain estimates, not guarantees.</p>
     <div className={styles.actions}>
