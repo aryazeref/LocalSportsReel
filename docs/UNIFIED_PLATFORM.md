@@ -21,6 +21,49 @@ as part of the unified website.
 - /liiga includes the browser-local Fan Zone demonstration.
 - /pricing and the predictions paywall use simulated localStorage entitlements.
 
+## Streamlit-to-Next.js Companion feature parity
+
+The Next.js \`/companion\` page uses a **copy of the original**
+\`fan-companion/assets/hero.jpg\` at \`frontend/public/companion-hero.jpg\`.
+No files under \`fan-companion/\` have been changed. The welcome includes
+the "Chat with me here" focus button and all six capability cards,
+with three visibly marked *Premium*. Badges signal the concept's pricing
+tiers, **not** a server-side paid entitlement or a functioning checkout.
+
+Personalise supports name, favourite club, language, response style,
+short/normal/long answers, fan-since year, and an optional favourite-player
+name. Non-secret preferences persist in this browser. The backend passes
+the name and length into the teammate's verified Companion class.
+
+For chat questions, the FastAPI \`/api/companion/respond\` route calls
+the original \`find_teams\` and \`add_team_facts\` functions, so another
+club mentioned in a question has real comparative facts, fact receipts
+and the same verification rules as the selected club. The original
+\`route()\` classifies plain-language podcast, score-prediction and alert
+requests using its deterministic keyword path (no extra LLM call).
+\`follow_ups()\` supplies context-dependent, clickable suggested questions
+after each response; the welcome suggestions also originate there.
+
+**Important action limitation:** A request like "My prediction is 3-2"
+or "Set an alert if chances drop below 15%" returns a typed action,
+which the Next.js page saves privately in localStorage. There is no
+persistent database, multi-user sharing, notification scheduler,
+background check or delivered alert. The UI explicitly labels this as
+local demo behavior, never claims a real alert has been activated,
+and never sends action values to a betting service.
+
+The \`/api/companion/overview\` endpoint exposes fact-derived rank, points,
+games played and next fixture. The fourth summary card links to
+\`/predictions\` rather than manufacturing exact top-four/playoff odds.
+The original Streamlit's separate season simulator and event-by-event
+live simulator remain **unmigrated** by design: the evaluated
+\`backend/app/prediction/**\` code is still the single source of statistical
+forecast and what-if calculations.
+
+AI/offline/fallback labels, citation receipts and fact verification are
+preserved. All action routing is marked "offline" because it is
+deterministic. The copied photo is an illustration, not match footage.
+
 ## Home: short-form reels + fan discussion
 
 **Homepage concept:** a 30–60-second vertical goal/recap video and a
@@ -64,6 +107,7 @@ used by the homepage.
 
 - GET /api/liiga/discover — real finished, live and upcoming matches for home cards.
 - GET /api/companion/teams — Liiga teams from the shared backend data source.
+- GET /api/companion/overview — real Liiga team overview for the welcome screen.
 - POST /api/companion/respond — send a chat question or request a briefing or
   podcast script. The optional include_forecast flag calls the existing
   get_predictions function. The optional include_impact flag calls the existing
