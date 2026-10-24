@@ -62,21 +62,55 @@ Open http://localhost:3000/companion or use the site navigation.
 The first prediction request can prepare historical data/model artifacts,
 which may take longer than subsequent cached requests.
 
-### Optional model-backed conversation
+### Enable real AI conversation (Windows PowerShell)
 
-Without a model key, the original fan-companion offline templates work without
-paid API calls. To enable a model, create backend/.env based on its ignored
-.env.example:
+**Why a message may say "Offline demo":** With no model configured, the
+companion uses deterministic Python templates. They are fact-checked but are
+not LLM-generated text. The UI now checks \`GET /api/companion/status\` and
+displays "AI chat configured" or "Offline demo mode". It also labels each
+reply according to the engine actually used, including fallback on API error.
 
-    COMPANION_ENABLE_LLM=true
-    LLM_PROVIDER=gemini
-    GEMINI_API_KEY=your_key_here
+1. From the project root, open PowerShell and create a private backend config:
 
-Or choose openai/anthropic with the corresponding key. Never put API keys in
-NEXT_PUBLIC_* settings or commit .env. When launching, pass your backend .env
-through a supported environment mechanism (e.g., uvicorn --env-file .env).
-If the provider is unavailable, the original companion can fall back to
-verified offline templates.
+       cd backend
+       Copy-Item .env.example .env
+
+2. Open \`backend/.env\` in your editor. For OpenAI, set:
+
+       COMPANION_ENABLE_LLM=true
+       LLM_PROVIDER=openai
+       OPENAI_API_KEY=your_actual_private_api_key_here
+       OPENAI_MODEL=gpt-4o-mini
+
+   Or configure \`LLM_PROVIDER=gemini\` with \`GEMINI_API_KEY\`, or
+   \`LLM_PROVIDER=anthropic\` with \`ANTHROPIC_API_KEY\`. API access may have
+   usage charges; ChatGPT subscription access does not grant an API key.
+   Do not paste API keys into chat, the frontend, or GitHub.
+
+3. Install backend dependencies and restart the FastAPI process:
+
+       .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+       .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
+
+   The backend now loads \`backend/.env\` itself. Environment variables that
+   are already set take precedence over the file.
+
+4. Verify the public **non-secret** status URL:
+   http://localhost:8000/api/companion/status
+   It should report \`available: true\`. This checks configuration, not key
+   validity, network availability, or billing quota.
+
+5. Open http://localhost:3000/companion. The browser selects actual AI
+   automatically when configured. Chat with the companion; an answer should
+   say **AI-generated** rather than **Offline demo**. If the API returns an
+   error or runs out of quota, the companion safely uses its offline templates
+   and clearly displays **Offline fallback**.
+
+\`fan-companion/\` remains unchanged. The backend explicitly uses the provider
+named by \`LLM_PROVIDER\`, even if there are keys for other providers in the
+environment. AI-generated claims are checked against verified Liiga facts.
+Predictions and what-if calculations continue to come exclusively from
+\`backend/app/prediction/\`.
 
 ## Current limits — NOT production infrastructure
 
