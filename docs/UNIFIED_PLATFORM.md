@@ -121,3 +121,22 @@ shampooshams/hackathon_oulu as an explicit, separate synchronization operation
 before adapting integrations. Do not edit fan-companion/ just to add Next.js
 frontend behavior. Keep the original prediction implementation stable and put
 cross-service adaptations in backend/app/services/companion_bridge.py.
+
+
+## Fan-facing forecasts (results-first interface)
+
+The public /predictions page deliberately presents match probabilities,
+four possible match outcomes, and concise regular-season points/rank impacts
+for the selected teams and nearby rivals. The long historical scoring tables,
+feature-level inputs, model-selection discussion, and simulation configuration
+are **not displayed** in the consumer interface.
+
+This is a presentation-only change: backend/app/prediction/** remains unchanged,
+its validations and historical evaluations remain in the repository, and the
+original forecast/impact API responses retain their provenance and limitations.
+A short user-friendly disclaimer remains visible. In particular, "top four on
+points" is **not** an official playoff qualification probability. Users should
+never interpret these estimated outcomes as guaranteed or betting advice.
+
+For developers and reviewers who need a technical audit, see
+docs/PREDICTION_DATA.md and docs/PREDICTION_EVALUATION.md.
