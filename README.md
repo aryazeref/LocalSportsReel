@@ -143,7 +143,7 @@ Create or edit your ignored `backend/.env` locally (never commit or share keys):
 ```ini
 LLM_PROVIDER=gemini
 GEMINI_API_KEY=your_gemini_key_here
-GEMINI_MODEL=gemini-2.5-flash
+GEMINI_MODEL=gemini-3.5-flash-lite
 ```
 
 The model is configurable; use a currently available model supporting structured
@@ -155,6 +155,13 @@ directory with explicit environment-file loading:
 ```
 
 On Linux/macOS, use `.venv/bin/python -m uvicorn app.main:app --reload --port 8000 --env-file .env`.
+
+If Google returns 404 saying a model is no longer available to new users,
+update `GEMINI_MODEL` in your local `.env` to the replacement specified in that
+error, then restart the backend. Listing a model does not guarantee generation
+access for your account. Pulling repository updates does not change an existing,
+ignored `.env` file. The replacement's free-tier eligibility still needs to be
+checked in your Google account.
 
 For OpenAI instead, set `LLM_PROVIDER=openai`, `OPENAI_API_KEY`, and optionally
 `OPENAI_MODEL=gpt-4.1-mini`. If `LLM_PROVIDER` is absent, the existing OpenAI

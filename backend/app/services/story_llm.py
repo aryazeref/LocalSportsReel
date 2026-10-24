@@ -48,7 +48,7 @@ def generate_draft(moment: Moment) -> DraftText | None:
 
 
 def _gemini_draft(moment: Moment, key: str) -> DraftText:
-    model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    model = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite")
     if not re.fullmatch(r"[A-Za-z0-9._-]+", model):
         raise ValueError("Invalid Gemini model name")
     generation_config = {
