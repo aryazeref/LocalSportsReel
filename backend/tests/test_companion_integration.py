@@ -122,3 +122,64 @@ def test_companion_rejects_invalid_chat_and_unknown_team(monkeypatch):
         "season": 2027, "team_id": "made-up", "message": "Hello",
     })
     assert missing.status_code == 404
+
+
+def test_ai_status_explicitly_reports_offline_without_disclosing_keys(monkeypatch):
+    from app.services.companion_ai import companion_ai_status
+    monkeypatch.setenv("COMPANION_ENABLE_LLM", "false")
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setenv("OPENAI_API_KEY", "top-secret-for-local-test")
+    response = TestClient(app).get("/api/companion/status")
+    assert response.status_code == 200
+    assert response.json()["available"] is False
+    assert "top-secret" not in response.text
+
+    monkeypatch.setenv("COMPANION_ENABLE_LLM", "true")
+    assert companion_ai_status()["available"] is True
+    assert companion_ai_status()["provider"] == "OpenAI"
+    assert "top-secret" not in str(companion_ai_status())
+
+
+def test_ai_status_respects_explicit_provider_not_other_keys(monkeypatch):
+    from app.services.companion_ai import companion_ai_status
+    monkeypatch.setenv("COMPANION_ENABLE_LLM", "true")
+    monkeypatch.setenv("LLM_PROVIDER", "gemini")
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "exists-but-wrong-provider")
+    assert companion_ai_status()["available"] is False
+    assert companion_ai_status()["provider"] == "Gemini"
+
+
+def test_mode_indicates_actual_ai_generation_or_offline_fallback(monkeypatch):
+    import app.services.companion_bridge as bridge
+
+    class FakeAI:
+        name = "Mock OpenAI provider"
+        def generate(self, system, messages, max_tokens=700):
+            return "Hi! Happy to talk about your team."
+
+    snapshot = build_companion_snapshot(example_data())
+    monkeypatch.setattr(bridge, "configured_backend", lambda: (FakeAI(), None))
+    ai_reply = companion_response(
+        snapshot, team_id="91:kärpät", message="test",
+        history=[], kind="chat", persona="buddy", language="English", use_ai=True,
+    )
+    assert ai_reply["generation_mode"] == "ai"
+    assert ai_reply["engine"] == "Mock OpenAI provider"
+    assert "Happy to talk" in ai_reply["text"]
+
+    class BrokenAI:
+        name = "Unavailable mock provider"
+        def generate(self, system, messages, max_tokens=700):
+            raise RuntimeError("model server is unavailable")
+
+    monkeypatch.setattr(bridge, "configured_backend", lambda: (BrokenAI(), None))
+    offline = companion_response(
+        snapshot, team_id="91:kärpät", message="test",
+        history=[], kind="chat", persona="buddy", language="English", use_ai=True,
+    )
+    assert offline["generation_mode"] == "fallback"
+    assert offline["engine"].startswith("Offline templates")
+    assert offline["mode_message"].startswith("The AI service could not")
+    assert "model server is unavailable" not in offline["mode_message"]
