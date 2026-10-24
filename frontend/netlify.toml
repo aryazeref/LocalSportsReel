@@ -1,0 +1,10 @@
+# Netlify uses this file because the site's Base directory is "frontend".
+# "out" is relative to the base directory (frontend/out in the deploy log).
+# Unlike the raw .next build cache, this folder contains index.html.
+[build]
+  command = "npm run build"
+  publish = "out"
+
+# This is a static export; Netlify does not need Next.js server functions.
+[build.environment]
+  NETLIFY_NEXT_PLUGIN_SKIP = "true"
