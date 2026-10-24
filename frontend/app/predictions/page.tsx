@@ -189,7 +189,6 @@ export default function PredictionsPage() {
 
   const activeImpact = impact ?? savedImpact;
   const showingSnapshot = Boolean(activeImpact && (!impact || loading || error));
-  const reconstructedStandings = activeImpact?.standings_basis === "completed_results_snapshot";
   const scenario = activeImpact?.scenarios.find(item => item.outcome === selectedOutcome);
   const baseline = [...(activeImpact?.baseline ?? [])].sort((a, b) => a.expected_rank - b.expected_rank || a.name.localeCompare(b.name));
   const scenarioByTeam = new Map((scenario?.teams ?? []).map(team => [team.team_id, team]));
