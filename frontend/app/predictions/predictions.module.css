@@ -153,3 +153,30 @@
   .evidenceCards strong { font-size: 23px; }
   .loading { padding: 20px; align-items: flex-start; }
 }
+
+
+/* Compact fan-facing scenario results; numerical calculations remain in FastAPI. */
+.impactHighlights { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin:12px 0 24px; }
+.impactHighlight { background:var(--surface); border:1px solid var(--line); border-radius:var(--r-lg); padding:23px; min-width:0; }
+.impactHighlight .controlLabel { margin:0 0 11px; }
+.impactHighlight h4 { font-size:clamp(28px,3.5vw,42px); letter-spacing:-1.2px; margin:0; font-variant-numeric:tabular-nums; }
+.impactHighlight h4 small { display:block; font-size:12px; color:var(--muted); letter-spacing:normal; font-weight:600; margin-top:6px; }
+.beforeAfter { color:var(--muted); font-size:12px; line-height:1.6; margin:13px 0 18px; }
+.impactDetail { border-top:1px solid var(--line); padding:13px 0 2px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; align-items:baseline; }
+.impactDetail span { font-size:12px; color:var(--muted); }
+.impactDetail strong { font-size:17px; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.impactDetail small { color:var(--muted); font-size:11px; }
+.rivalSummary { background:var(--surface); border:1px solid var(--line); border-radius:var(--r-lg); padding:21px; }
+.rivalSummary h4 { font-size:20px; margin:0; }
+.rivalSummary .scope { margin:7px 0 16px; font-size:12px; }
+.rivalList { display:grid; gap:0; }
+.rivalRow { display:grid; grid-template-columns:minmax(90px,1fr) minmax(105px,auto) minmax(92px,auto); gap:12px; border-top:1px solid var(--line); align-items:center; padding:12px 0; font-size:13px; }
+.rivalRow span { font-variant-numeric:tabular-nums; text-align:right; }
+.rivalRow strong { overflow-wrap:anywhere; }
+@media(max-width:700px) {
+  .impactHighlights { grid-template-columns:1fr; }
+  .impactHighlight { padding:18px; }
+  .rivalSummary { padding:16px; }
+  .rivalRow { grid-template-columns:1fr 1fr; gap:5px; }
+  .rivalRow span:last-child { grid-column:2; }
+}
