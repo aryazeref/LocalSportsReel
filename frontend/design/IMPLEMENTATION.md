@@ -8,8 +8,10 @@ forecasts, and scenario calculations are retained. Backend files are unchanged.
 ## Fonts and themes
 
 - Plus Jakarta Sans (variable 400–800) and IBM Plex Mono (500/600) are self-hosted
-  through Fontsource packages and `next/font/local`; builds and page loads do not
-  request Google Fonts. The reference CSS's remote import was replaced accordingly.
+  through Fontsource CSS package imports; builds and page loads do not request
+  Google Fonts. Package-relative font URLs avoid the direct `next/font/local`
+  paths into `node_modules` that failed to resolve in the Windows development
+  environment. The reference CSS's remote import was replaced accordingly.
 - The server supplies `data-theme="light"` as the fallback. A blocking inline head
   script chooses a valid saved override or the system preference before body paint.
 - The moon/sun button switches light/dark and remembers the choice under

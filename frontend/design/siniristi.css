@@ -4,7 +4,7 @@
    Fonts: Plus Jakarta Sans (UI + headlines), IBM Plex Mono (fact chips, IDs).
    ========================================================================== */
 
-/* Fonts are self-hosted by next/font/local in app/layout.tsx. */
+/* Fonts are self-hosted through Fontsource CSS imports in app/layout.tsx. */
 
 /* ---------- 1. Tokens ---------- */
 :root {
@@ -63,8 +63,8 @@
   --chart-miss: #c3cedb;
 
   /* type */
-  --font: var(--font-jakarta, "Plus Jakarta Sans"), Helvetica, Arial, sans-serif;
-  --font-mono: var(--font-plex-mono, "IBM Plex Mono"), ui-monospace, monospace;
+  --font: "Plus Jakarta Sans Variable", Helvetica, Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
   --fs-display-xl: clamp(48px, 6vw, 72px);
   --fs-display-l: clamp(36px, 4.5vw, 48px);
   --fs-display-m: clamp(24px, 3vw, 30px);
