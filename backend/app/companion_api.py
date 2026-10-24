@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from .liiga_api import _dataset, current_season
-from .prediction.service import PredictionUnavailable, get_predictions
+from .prediction.service import PredictionUnavailable, get_predictions, get_impact
 from .services.companion_bridge import build_companion_snapshot, companion_response, team_options
 
 router = APIRouter(prefix="/api/companion", tags=["Fan companion"])
@@ -30,6 +30,7 @@ class CompanionRequest(BaseModel):
     use_ai: bool = False
     # Explicit opt-in prevents preparing the prediction model for every chat.
     include_forecast: bool = False
+    include_impact: bool = False
 
 
 class Receipt(BaseModel):
@@ -50,6 +51,23 @@ class CompanionForecast(BaseModel):
     warnings: list[str]
 
 
+class CompanionImpactOutcome(BaseModel):
+    outcome: str
+    expected_points: float
+    delta_points: float
+    expected_rank: float
+
+
+class CompanionImpact(BaseModel):
+    game_id: int
+    model: str
+    scope: str
+    top_n: int
+    outcomes: list[CompanionImpactOutcome]
+    limitations: list[str]
+    warnings: list[str]
+
+
 class CompanionResponse(BaseModel):
     kind: Literal["chat", "brief", "podcast"]
     text: str
@@ -64,6 +82,8 @@ class CompanionResponse(BaseModel):
     is_mock: bool
     forecast: CompanionForecast | None = None
     forecast_warning: str | None = None
+    impact: CompanionImpact | None = None
+    impact_warning: str | None = None
     model_note: str
 
 
@@ -95,7 +115,10 @@ async def respond(payload: CompanionRequest):
     fixture = None
     model_name = None
     forecast_warning = None
-    if payload.include_forecast:
+    impact_result = None
+    impact_warning = None
+    prediction = None
+    if payload.include_forecast or payload.include_impact:
         if chosen != current_season():
             forecast_warning = "Forecasts are available for the current season only."
         else:
@@ -107,6 +130,17 @@ async def respond(payload: CompanionRequest):
                     forecast_warning = "No upcoming match forecast is available for this team."
             except PredictionUnavailable:
                 forecast_warning = "Prediction service is currently unavailable; no forecast was invented."
+    if payload.include_impact:
+        if fixture is None or prediction is None:
+            impact_warning = "A matching upcoming forecast is required for scenario analysis."
+        else:
+            try:
+                impact_result = await get_impact(
+                    fixture.game_id, top_n=4, simulations=4000,
+                    expected_model_version=prediction.model.model_version,
+                )
+            except PredictionUnavailable:
+                impact_warning = "League-impact simulation is currently unavailable; no scenario was invented."
     try:
         # LLM clients and fact checking are synchronous: run off the event loop.
         return await asyncio.to_thread(
@@ -117,6 +151,7 @@ async def respond(payload: CompanionRequest):
             language=payload.language, use_ai=payload.use_ai,
             forecast=fixture, forecast_model=model_name,
             forecast_warning=forecast_warning,
+            impact=impact_result, impact_warning=impact_warning,
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Selected team is not available.") from exc
