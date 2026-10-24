@@ -7,6 +7,7 @@ from .data import CITIES
 from .models import FeedResponse, Story
 from .liiga_api import router as liiga_router
 from .prediction.routes import router as prediction_router
+from .companion_api import router as companion_router
 
 app = FastAPI(title="Local SportsReel API", version="0.1.0")
 origins = os.getenv("FRONTEND_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000")
@@ -18,6 +19,7 @@ app.add_middleware(
 )
 app.include_router(liiga_router)
 app.include_router(prediction_router)
+app.include_router(companion_router)
 
 
 @app.get("/api/health")
