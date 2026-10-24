@@ -6,7 +6,7 @@ import DemoCheckout, { type CheckoutProduct } from "../../components/demo-checko
 import Paywall from "../../components/paywall";
 import { activateDemoPremium, hasReportAccess, purchaseDemoReport, reportId as getReportId, resetDemoPurchases } from "../../lib/entitlements";
 import { useEntitlements } from "../../lib/use-entitlements";
-import type { Forecast, ImpactResponse, ModelMetric, Outcome, PredictionsResponse } from "../../lib/prediction-types";
+import type { Forecast, ImpactResponse, Outcome, PredictionsResponse } from "../../lib/prediction-types";
 import { emptyImpactSnapshot, impactSnapshotKey, parseImpactSnapshot, readStoredImpact,
   saveImpactSnapshot, subscribeImpactSnapshots, validImpact } from "../../lib/impact-snapshot";
 import styles from "./predictions.module.css";
@@ -45,44 +45,9 @@ function dateLabel(value?: string | null, includeTime = true): string {
   }).format(date);
 }
 
-function modelLabel(name: string): string {
-  const normalized = name.toLowerCase();
-  if (normalized.includes("knn")) return "Paper-inspired kNN";
-  if (normalized.includes("logistic")) return "Regularized logistic model";
-  if (normalized.includes("elo")) return "Elo baseline";
-  if (normalized.includes("prior") || normalized.includes("frequency")) return "League-frequency baseline";
-  return name.replace(/_/g, " ");
-}
-
-function seasonLabel(season: number): string {
-  return `${season - 1}–${String(season).slice(-2)}`;
-}
-
-function seasonSpan(seasons?: number[]): string | null {
-  if (!seasons?.length) return null;
-  const ordered = [...new Set(seasons)].sort((a, b) => a - b);
-  return ordered.length === 1 ? `1 season · ${seasonLabel(ordered[0])}`
-    : `${ordered.length} seasons · ${ordered[0] - 1}–${ordered[ordered.length - 1]}`;
-}
-
-function validMetrics(metrics?: ModelMetric[]): ModelMetric[] {
-  return (metrics ?? []).filter(metric => Number.isFinite(metric.log_loss)
-    && Number.isFinite(metric.brier) && Number.isFinite(metric.final_winner_accuracy));
-}
-
 function outcomeLabel(outcome: Outcome, fixture: Forecast): string {
   const winner = outcome.startsWith("home") ? fixture.home_team.name : fixture.away_team.name;
   return `${winner} wins ${outcome.endsWith("regulation") ? "in regulation" : "in extra time"}`;
-}
-
-function featureLabel(name: string, fixture: Forecast): string {
-  const match = /^(home|away)_(total|home|away)_(goals_for|goals_against|form_rank)$/.exec(name);
-  if (!match) return name.replace(/_/g, " ");
-  const team = match[1] === "home" ? fixture.home_team.name : fixture.away_team.name;
-  const context = match[2] === "total" ? "all venues" : match[2] === "home" ? "at home" : "away";
-  const quantity = match[3] === "goals_for" ? "Goals scored / game"
-    : match[3] === "goals_against" ? "Goals conceded / game" : "Form strength (0–1)";
-  return `${team} · ${quantity} · ${context}`;
 }
 
 async function readResponse<T>(response: Response): Promise<T> {
@@ -108,15 +73,6 @@ function validForecast(fixture: Forecast): boolean {
     && Math.abs(final[0] + final[1] - 1) < 0.0001;
 }
 
-function Notes({ items, title = "Data and model notes" }: { items: string[]; title?: string }) {
-  const notes = [...new Set(items.filter(Boolean))];
-  if (notes.length === 0) return null;
-  return <details className={styles.notes}>
-    <summary>{title} <span>{notes.length}</span></summary>
-    <ul>{notes.map((note, index) => <li key={index}>{note}</li>)}</ul>
-  </details>;
-}
-
 function ForecastCard({ fixture, selected, unlocked, onSelect }: { fixture: Forecast; selected: boolean; unlocked: boolean; onSelect: () => void }) {
   const { probabilities, home_team: home, away_team: away } = fixture;
   return <article className={`${styles.fixtureCard} ${selected ? styles.selectedCard : ""}`}>
@@ -139,20 +95,6 @@ function ForecastCard({ fixture, selected, unlocked, onSelect }: { fixture: Fore
   </article>;
 }
 
-function MetricTable({ metrics, selected, rolling = false }: { metrics: ModelMetric[]; selected?: string; rolling?: boolean }) {
-  return <div className={styles.tableWrap} tabIndex={0} role="region" aria-label={rolling ? "Rolling historical policy comparison, scroll horizontally for all columns" : "Historical test results, scroll horizontally for all columns"}>
-    <table className={styles.metricTable}>
-      <caption>{rolling ? "Rolling historical policy comparison" : "Historical test results"} · lower log loss and Brier score are better</caption>
-      <thead><tr><th scope="col">{rolling ? "Forecast policy" : "Model"}</th><th scope="col">Log loss</th><th scope="col">Brier score</th><th scope="col">Final-winner accuracy</th></tr></thead>
-      <tbody>{metrics.map(metric => <tr key={metric.name} className={metric.selected || metric.name === selected ? styles.selectedMetric : undefined}>
-        <th scope="row">{metric.display_name || modelLabel(metric.name)}{(metric.selected || metric.name === selected) && <span className={styles.chosen}>{rolling ? "Selected policy" : "Selected"}</span>}
-          {metric.feature_set && metric.window != null && <small className={styles.metricVariant}>{metric.feature_set === "homeaway" ? "18-feature" : "6-feature"} context · {metric.window}-match window</small>}</th>
-        <td>{metric.log_loss.toFixed(3)}</td><td>{metric.brier.toFixed(3)}</td><td>{percent(metric.final_winner_accuracy)}</td>
-      </tr>)}</tbody>
-    </table>
-  </div>;
-}
-
 export default function PredictionsPage() {
   const entitlements = useEntitlements();
   const [checkoutProduct, setCheckoutProduct] = useState<CheckoutProduct | null>(null);
@@ -166,7 +108,8 @@ export default function PredictionsPage() {
   const error = loading ? null : forecastResult.error;
   const [selectedGame, setSelectedGame] = useState<number | null>(null);
   const [selectedOutcome, setSelectedOutcome] = useState<Outcome>("home_regulation");
-  const [topN, setTopN] = useState(4);
+  // Points-only top-four comparison: this is not an official playoff forecast.
+  const topN = 4;
   const [impactResult, setImpactResult] = useState<{
     key: string; data: ImpactResponse | null; error: string | null;
   } | null>(null);
@@ -247,21 +190,17 @@ export default function PredictionsPage() {
   const activeImpact = impact ?? savedImpact;
   const showingSnapshot = Boolean(activeImpact && (!impact || loading || error));
   const reconstructedStandings = activeImpact?.standings_basis === "completed_results_snapshot";
-  const historicalTable = showingSnapshot || reconstructedStandings;
   const scenario = activeImpact?.scenarios.find(item => item.outcome === selectedOutcome);
   const baseline = [...(activeImpact?.baseline ?? [])].sort((a, b) => a.expected_rank - b.expected_rank || a.name.localeCompare(b.name));
   const scenarioByTeam = new Map((scenario?.teams ?? []).map(team => [team.team_id, team]));
-  const model = data?.model;
-  const test = data?.evaluation.test;
-  const rollingEvaluation = test?.kind === "retrospective_rolling_origin"
-    && (test.seasons?.length ?? test.per_season?.length ?? 0) > 1;
-  const metricRows = validMetrics(test?.metrics);
-  const testedModel = metricRows.find(metric => metric.selected || metric.name === data?.evaluation.selected_model);
-  const calibration = (testedModel?.calibration_bins ?? []).filter(bin => bin.count > 0
-    && bin.predicted != null && bin.observed != null && Number.isFinite(bin.predicted) && Number.isFinite(bin.observed));
   const selectedLabel = fixture ? outcomeLabel(selectedOutcome, fixture) : "";
-  const teamCount = activeImpact?.baseline.length;
-  const topOptions = [...new Set([1, 4, 8, 12, 16, topN])].filter(value => !teamCount || value <= teamCount).sort((a, b) => a - b);
+  // Rival movements use existing scenario results, never new calculations.
+  const competingTeams = fixture && scenario ? baseline
+    .filter(team => team.team_id !== fixture.home_team.team_id && team.team_id !== fixture.away_team.team_id)
+    .map(before => ({ before, after: scenarioByTeam.get(before.team_id) }))
+    .filter(item => item.after !== undefined)
+    .sort((a, b) => Math.abs(b.after!.delta_rank) - Math.abs(a.after!.delta_rank) || a.before.name.localeCompare(b.before.name))
+    .slice(0, 5) : [];
   const visibleFixtures = showAllFixtures ? data?.fixtures ?? [] : (data?.fixtures ?? []).slice(0, 6);
 
   function confirmCheckout(product: CheckoutProduct) {
@@ -285,7 +224,7 @@ export default function PredictionsPage() {
     <header className={styles.header}>
       <div><p className={styles.eyebrow}>BEFORE THE BUZZER · LIIGA FORECASTS</p>
         <h1>Who wins.<br /><span>What changes.</span></h1>
-        <p className={styles.description}>Explore match probabilities, then see how one result can change the points race for every team.</p>
+        <p className={styles.description}>Pick a matchup, see each team’s chances, and discover what a win or loss could mean for the rest of the league.</p>
       </div>
       <div className={styles.headerActions}>
         <span className={styles.experimental}>Experimental forecasts</span>
@@ -304,7 +243,7 @@ export default function PredictionsPage() {
     </div>
 
     {loading && <div role="status" className={styles.loading}><span className={styles.spinner} aria-hidden="true" />
-      <div><strong>Preparing the next matchday</strong><p>The first visit may take a minute while historical results and model comparisons are prepared.</p></div>
+      <div><strong>Preparing the next matchday</strong><p>Getting the latest match forecasts ready.</p></div>
     </div>}
     {error && <div role="alert" className={styles.error}><strong>{data ? "Could not refresh forecasts." : "Forecasts are unavailable."}</strong> {error}
       <button className={styles.textButton} onClick={() => setReload(value => value + 1)}>Try again</button></div>}
@@ -313,14 +252,14 @@ export default function PredictionsPage() {
       <div className={styles.contextStrip}>
         <span><strong>{data.season - 1}–{String(data.season).slice(-2)}</strong> regular season</span>
         <span><strong>{data.fixtures.length}</strong> upcoming forecasts</span>
-        <span>{model?.display_name || modelLabel(model?.name ?? "Model")}</span>
-        <a href="#scenario-section">Explore league impact <span aria-hidden="true">↗</span></a>
+        <span>Pre-match estimates</span>
+        <a href="#scenario-section">See what happens next <span aria-hidden="true">↗</span></a>
       </div>
-      <p className={styles.forecastNote}>Estimated chances, not guaranteed results. The model uses historical data; late lineup and goalie changes may not be reflected.</p>
-      <Notes items={data.warnings ?? []} />
+      <p className={styles.forecastNote}>These chances are estimates, not guarantees. Injuries, lineups and starting goalies can change a match.</p>
+
 
       <section className={styles.forecastsSection} aria-labelledby="forecast-heading">
-        <div className={styles.sectionHeading}><div><p className={styles.eyebrow}>THE NEXT MATCHUPS</p><h2 id="forecast-heading">Read the chances</h2></div>
+        <div className={styles.sectionHeading}><div><p className={styles.eyebrow}>THE NEXT MATCHUPS</p><h2 id="forecast-heading">Who has the edge?</h2></div>
           <span className={styles.sectionTag}>WIN PROBABILITIES</span></div>
         {data.fixtures.length === 0 && <p className={styles.notice}>No upcoming matches are available for prediction. Completed and live games are not shown as pre-match forecasts.</p>}
         <div className={styles.fixtureGrid}>{visibleFixtures.map(item => <ForecastCard key={`${item.season}-${item.game_id}`} fixture={item}
@@ -333,142 +272,92 @@ export default function PredictionsPage() {
       </section>
 
       <section id="scenario-section" className={styles.scenarioSection} aria-labelledby="scenario-heading">
-        <div className={styles.sectionHeading}><div><p className={styles.eyebrow}>ONE RESULT. EVERY RIVAL.</p><h2 id="scenario-heading">Explore the ripple effect</h2></div>
+        <div className={styles.sectionHeading}><div><p className={styles.eyebrow}>ONE RESULT. EVERY RIVAL.</p><h2 id="scenario-heading">What happens if…?</h2></div>
           <span className={styles.sectionTag}>WHAT IF?</span></div>
         {fixture && !selectedReportUnlocked && <Paywall matchup={`${fixture.home_team.name} vs ${fixture.away_team.name}`}
           onUnlockReport={() => setCheckoutProduct({ kind: "report", title: `${fixture.home_team.name} vs ${fixture.away_team.name}`, reportId: selectedReportId as string })}
           onGetPremium={() => setCheckoutProduct({ kind: "premium", title: "Unlimited reports and simulations" })} />}
         {!fixture && <p className={styles.notice}>Select an upcoming fixture to preview its advanced report.</p>}
         {fixture && selectedReportUnlocked && <>
-        <p className={styles.scope}>Regular-season points projections. Tied teams have probability ranges; official tie-breakers and playoff rules are not included.</p>
+        <p className={styles.scope}>Choose a possible result. See how it changes both clubs’ projected seasons—and which rivals could be affected.</p>
           <div className={styles.scenarioControls}>
             <div><span className={styles.controlLabel}>Selected match</span><h3>{fixture.home_team.name} <span>vs</span> {fixture.away_team.name}</h3>
               <p>{dateLabel(fixture.start)}</p></div>
-            <label className={styles.targetSelect}>Points-finish target
-              <select value={topN} onChange={event => setTopN(Number(event.target.value))}>
-                {topOptions.map(value => <option key={value} value={value}>Top {value} on points</option>)}
-              </select>
-            </label>
+            
           </div>
           <div className={styles.scenarioButtons} role="group" aria-label="Match outcome scenario">
             {OUTCOMES.map(outcome => <button key={outcome} className={styles.scenarioButton} aria-pressed={selectedOutcome === outcome}
               onClick={() => setSelectedOutcome(outcome)}>
               <strong>{outcome.startsWith("home") ? fixture.home_team.name : fixture.away_team.name} wins</strong>
               <span>{outcome.endsWith("regulation") ? "In regulation" : "Overtime / shootout"}</span>
-              <small>{POINTS[outcome][0]}–{POINTS[outcome][1]} points · {percent(fixture.probabilities[outcome])} forecast</small>
+              <small>{percent(fixture.probabilities[outcome])} chance · {POINTS[outcome][0]}–{POINTS[outcome][1]} league points</small>
             </button>)}
           </div>
 
           {historicalTable && activeImpact && <div role="status" className={styles.snapshotNotice}>
             <strong>{showingSnapshot ? "Last saved calculation · not live standings" : "Pre-game standings snapshot · not live standings"}</strong>
-            <p>Calculated {dateLabel(activeImpact.generated_at)} · {reconstructedStandings ? "Match data" : "Standings"} fetched {dateLabel(activeImpact.standings_updated_at)} (Helsinki time).</p>
-            {reconstructedStandings && <p>Points are reconstructed from real completed results before {dateLabel(activeImpact.standings_as_of)} (Helsinki time).
-              All matches from that cutoff onward are simulated, including {activeImpact.simulated_started_games} already-started matches.
-              Their live scores and today&apos;s final results are not used. This is a pre-game projection, not a live forecast.</p>}
+            <p>Showing an earlier pre-match estimate from {dateLabel(activeImpact.generated_at)}. It may not reflect the latest results.</p>
             {showingSnapshot && <>
               <p>{impactLoading || loading ? "Updating; keeping the previous table visible."
                 : impactError || "The latest forecasts could not be refreshed."}</p>
-              <p>This saved table includes all four outcome scenarios from that calculation.</p>
+
               <button className={styles.textButton} disabled={impactLoading || loading} onClick={() => setImpactRetry(value => value + 1)}>Retry league impact</button>
             </>}
           </div>}
           {impactLoading && !activeImpact && <div role="status" className={styles.loading}><span className={styles.spinner} aria-hidden="true" />
             <div><strong>Projecting the remaining schedule</strong><p>Comparing this outcome with the baseline points race.</p></div></div>}
           {impactError && !activeImpact && <div role="alert" className={styles.error}><strong>League impact is unavailable.</strong> {impactError}
-            <p>No previous calculation is saved in this browser for this match, points-finish target, and model.</p>
+
             <button className={styles.textButton} onClick={() => setImpactRetry(value => value + 1)}>Retry league impact</button></div>}
 
           {activeImpact && scenario && <>
             <div className={styles.scenarioSummary}><span className={styles.summaryIcon} aria-hidden="true">↗</span><div>
               <span className={styles.controlLabel}>If this result happens</span><h3>{selectedLabel}</h3>
-              <p>{activeImpact.simulations.toLocaleString()} simulations · {activeImpact.remaining_fixtures} {reconstructedStandings ? "fixtures from snapshot" : "remaining fixtures"} · top {topN} on points</p>
+              <p>Compare what this match result could mean for each club’s season.</p>
             </div></div>
-            <div className={styles.tableWrap} tabIndex={0} role="region" aria-label="League points projections, scroll horizontally for all columns">
-              <table className={styles.impactTable}>
-                <caption>{showingSnapshot ? "Saved scenario" : reconstructedStandings ? "Pre-game snapshot scenario" : "Scenario"}: {selectedLabel}. Baseline order retained for comparison.</caption>
-                <thead><tr><th scope="col">Team</th><th scope="col">{historicalTable ? "Points at snapshot" : "Points now"}</th><th scope="col">Baseline points</th><th scope="col">Scenario points</th>
-                  <th scope="col">Change</th><th scope="col">Points rank <span>baseline → scenario</span></th><th scope="col">Top {topN} baseline</th><th scope="col">Top {topN} scenario</th></tr></thead>
-                <tbody>{baseline.map(team => {
-                  const projected = scenarioByTeam.get(team.team_id);
-                  if (!projected) return null;
-                  const featured = team.team_id === fixture.home_team.team_id || team.team_id === fixture.away_team.team_id;
-                  return <tr key={team.team_id} className={featured ? styles.featuredTeam : undefined}>
-                    <th scope="row">{team.name}{featured && <span className={styles.inMatch}>In this match</span>}</th>
-                    <td>{team.current_points}</td><td>{team.expected_points.toFixed(1)}</td><td>{projected.expected_points.toFixed(1)}</td>
-                    <td className={projected.delta_points > 0.05 ? styles.positive : projected.delta_points < -0.05 ? styles.negative : styles.muted}>{signed(projected.delta_points)}</td>
-                    <td><span className={styles.muted}>{team.expected_rank.toFixed(1)}</span> → {projected.expected_rank.toFixed(1)}
-                      <small className={projected.delta_rank < -0.05 ? styles.positive : projected.delta_rank > 0.05 ? styles.negative : styles.muted}> ({signed(projected.delta_rank)})</small></td>
-                    <td>{probabilityRange(team.top_n_lower, team.top_n_upper)}</td><td>{probabilityRange(projected.top_n_lower, projected.top_n_upper)}</td>
-                  </tr>;
-                })}</tbody>
-              </table>
+            <div className={styles.impactHighlights}>
+              {[fixture.home_team, fixture.away_team].map(team => {
+                const before = baseline.find(row => row.team_id === team.team_id);
+                const after = scenarioByTeam.get(team.team_id);
+                if (!before || !after) return null;
+                const movement = before.expected_rank - after.expected_rank;
+                return <article key={team.team_id} className={styles.impactHighlight}>
+                  <p className={styles.controlLabel}>{team.name}</p>
+                  <h4>{after.expected_points.toFixed(1)} <small>projected season points</small></h4>
+                  <p className={styles.beforeAfter}>Before: {before.expected_points.toFixed(1)} · Change: {signed(after.delta_points)}</p>
+                  <div className={styles.impactDetail}>
+                    <span>Average projected league position</span>
+                    <strong>{before.expected_rank.toFixed(1)} → {after.expected_rank.toFixed(1)}</strong>
+                    <small>{Math.abs(movement) < 0.05 ? "Almost unchanged" : movement > 0 ? "Moving up" : "Moving down"}</small>
+                  </div>
+                  <div className={styles.impactDetail}>
+                    <span>Chance of finishing top {topN} on points</span>
+                    <strong>{probabilityRange(after.top_n_lower, after.top_n_upper)}</strong>
+                  </div>
+                </article>;
+              })}
             </div>
-            <p className={styles.tableHint}>Ranks are average positions based on points; a negative rank change is an improvement. Ranges reflect unresolved tied-point ordering, not confidence intervals.</p>
-            <p className={styles.scope}>Remaining-match probabilities are held fixed. The sampling margin is at most approximately ±{(activeImpact.max_mc_margin_95 * 100).toFixed(1)} percentage points at 95% for each reported probability; model uncertainty is additional.</p>
-            <p className={styles.updated}>{reconstructedStandings ? "Match data" : "Standings"} fetched {dateLabel(activeImpact.standings_updated_at)} · This scenario does not predict playoff qualification or a championship.</p>
-            <Notes items={[...(activeImpact.warnings ?? []), ...(activeImpact.limitations ?? [])]} title="Scenario assumptions" />
+            <div className={styles.rivalSummary}>
+              <h4>And what about the rivals?</h4>
+              <p className={styles.scope}>Other clubs with the largest projected position changes.</p>
+              <div className={styles.rivalList}>
+                {competingTeams.map(({ before, after }) => after && <div key={before.team_id} className={styles.rivalRow}>
+                  <strong>{before.name}</strong>
+                  <span>{before.expected_rank.toFixed(1)} → {after.expected_rank.toFixed(1)}</span>
+                  <span className={Math.abs(after.delta_rank) < 0.05 ? styles.muted : after.delta_rank < 0 ? styles.positive : styles.negative}>
+                    {Math.abs(after.delta_rank) < 0.05 ? "Little change" : after.delta_rank < 0 ? "↑ Better" : "↓ Lower"}
+                  </span>
+                </div>)}
+              </div>
+            </div>
+            <p className={styles.tableHint}>“Top {topN} on points” is not an official playoff chance. Teams tied on points may finish in a different order. These are estimates, not promises.</p>
+            <p className={styles.updated}>Based on information updated {dateLabel(activeImpact.standings_updated_at)}.</p>
+            </>}
+
           </>}
-
-          <details className={styles.notes}>
-            <summary>Team context for this forecast</summary>
-            <p>{fixture.home_team.name}: {fixture.features.home_history} prior results. {fixture.away_team.name}: {fixture.features.away_history} prior results.
-              {fixture.features.cold_start && " One or both teams have limited usable history."}</p>
-            <p>{model?.name.includes("prior") ? "The selected league baseline uses historical outcome frequencies; the team statistics below are shown for context."
-              : model?.name.includes("elo") ? "The selected Elo baseline uses sequential result ratings; the recent-form statistics below are shown for context."
-              : "The model uses these historical scoring and recent-form features."}</p>
-            <p>History cutoff: {dateLabel(fixture.features.history_cutoff, false)}. Only results from earlier Helsinki calendar dates contribute. Form strength is separate from the official league table; 1 represents the top of the recent-form table and 0 the bottom.</p>
-            <div className={styles.inputGrid}>{fixture.features.names.map((name, index) => <div key={`${name}-${index}`}>
-              <span>{featureLabel(name, fixture)}</span><strong>{Number.isFinite(fixture.features.values[index]) ? fixture.features.values[index].toFixed(2) : "Unknown"}</strong>
-            </div>)}</div>
-            <Notes items={fixture.warnings ?? []} title="Match data notes" />
-          </details>
-        </>}
       </section>
 
-      {selectedReportUnlocked && <>
-      <section className={styles.evidenceSection} aria-labelledby="evidence-heading">
-        <div className={styles.sectionHeading}><div><p className={styles.eyebrow}>THE EVIDENCE BEHIND THE ESTIMATE</p><h2 id="evidence-heading">Historical evidence</h2></div>
-          <span className={styles.sectionTag}>HISTORICAL EVALUATION</span></div>
-        <div className={styles.evidenceCards}>
-          <div><span>Current forecast model</span><strong>{model?.display_name || modelLabel(model?.name ?? "Model")}</strong><small>Chosen using earlier validation data, then refit on known history</small></div>
-          <div><span>Historical training</span><strong>{model?.training_matches?.toLocaleString() ?? "Not reported"}<small> matches</small></strong>
-            {seasonSpan(model?.training_seasons) && <small>{seasonSpan(model?.training_seasons)}</small>}
-            <small>Trained through {dateLabel(model?.training_cutoff, false)}</small></div>
-          <div><span>{rollingEvaluation ? "Rolling historical evaluation" : "Historical test period"}</span><strong>{test?.count?.toLocaleString() ?? "Not reported"}<small> matches</small></strong>
-            {seasonSpan(test?.seasons ?? (test?.season != null ? [test.season] : undefined)) && <small>{seasonSpan(test?.seasons ?? (test?.season != null ? [test.season] : undefined))}</small>}
-            <small>{dateLabel(test?.start, false)} – {dateLabel(test?.end, false)}</small></div>
-        </div>
-        {rollingEvaluation && <p className={styles.scope}>Each season was predicted using earlier data; the selected method and history window can change between seasons. These pooled results evaluate that selection policy, not the current fixed model. Retrospective evaluation, not a new blind test.</p>}
-        {!rollingEvaluation && test?.independent_blind === false && <p className={styles.scope}>Retrospective historical evaluation, not a new blind test.</p>}
-        {metricRows.length > 0 ? <MetricTable metrics={metricRows} selected={data.evaluation.selected_model} rolling={rollingEvaluation} />
-          : <p className={styles.notice}>Detailed historical metrics were not provided by the model response.</p>}
-        <p className={styles.scope}>Log loss and Brier score evaluate the four regulation/extra-time probabilities. Final-winner accuracy measures which team won, including overtime and shootouts. Historical performance does not guarantee future results.</p>
-        {(test?.per_season?.length ?? 0) > 0 && <details className={styles.notes}>
-          <summary>Season-by-season evaluation ({test?.per_season?.length} seasons)</summary>
-          <p>Each season has its own earlier validation period and selected configuration. The comparison below retains the models selected before that season&apos;s evaluation.</p>
-          {test?.per_season?.map(period => <section key={period.season} className={styles.seasonEvaluation} aria-label={`Evaluation for ${seasonLabel(period.season)}`}>
-            <h3>{seasonLabel(period.season)} · {period.count?.toLocaleString() ?? "Not reported"} matches</h3>
-            <p>{dateLabel(period.start, false)} – {dateLabel(period.end, false)}.
-              {period.selected_model && ` Selected: ${modelLabel(period.selected_model)}.`}</p>
-            {period.validation && <p>Earlier validation: {dateLabel(period.validation.start, false)} – {dateLabel(period.validation.end, false)}
-              {period.validation.count != null && ` · ${period.validation.count.toLocaleString()} matches`}.</p>}
-            <MetricTable metrics={validMetrics(period.metrics)} selected={period.selected_model} />
-          </section>)}
-        </details>}
-        {calibration.length > 0 && <details className={styles.notes}>
-          <summary>Did the home-win chances match past outcomes?</summary>
-          <p>{rollingEvaluation ? "Pooled historical forecasts from the selected policy" : "Historical test forecasts"} grouped by home-win probability. Compare the average forecast with how often the home team actually won. Small groups are less reliable.</p>
-          <div className={styles.tableWrap} tabIndex={0} role="region" aria-label="Historical home-win calibration, scroll horizontally for all columns"><table className={styles.metricTable}>
-            <caption>{rollingEvaluation ? "Selected policy" : "Selected model"} · historical home-win calibration check</caption>
-            <thead><tr><th scope="col">Forecast band</th><th scope="col">Matches</th><th scope="col">Average forecast</th><th scope="col">Observed home wins</th></tr></thead>
-            <tbody>{calibration.map((bin, index) => <tr key={index}><th scope="row">{percent(bin.lower, 0)}–{percent(bin.upper, 0)}</th>
-              <td>{bin.count}</td><td>{percent(bin.predicted as number)}</td><td>{percent(bin.observed as number)}</td></tr>)}</tbody>
-          </table></div>
-        </details>}
-        <Notes items={data.evaluation.limitations ?? []} title="Evaluation limitations" />
-      </section>
-      </>}
-      <footer className={styles.footer}><span>LocalSportsReel · Predictions with context.</span><span>Statistical forecasts · No LLM key required</span></footer>
+      <footer className={styles.footer}><span>LocalSportsReel · Match probabilities and season possibilities.</span><span>Estimated outcomes · Actual results may differ</span></footer>
     </>}
     <DemoCheckout product={checkoutProduct} onClose={() => setCheckoutProduct(null)} onConfirm={confirmCheckout} />
   </main>;
