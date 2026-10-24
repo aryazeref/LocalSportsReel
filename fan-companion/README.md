@@ -14,7 +14,7 @@ cp .env.example .env        # optional: add an API key for full AI answers
 streamlit run app.py
 ```
 
-Without an API key, the app uses offline templates. They follow the same fact-citing rules, so the demo always works. Add `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` to `.env` for fluent AI answers, personas and Finnish.
+Without an API key, the app uses offline templates. They follow the same fact-citing rules, so the demo always works. Add `GEMINI_API_KEY`, `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` to `.env` for fluent AI answers, personas and Finnish.
 
 Run the reliability tests with `python -m pytest -q`.
 
@@ -60,7 +60,7 @@ The adapter for the Liiga stats API (v1) is in `companion/data/providers.py` (`L
 1. In `.env`, set `LIIGA_API_BASE` (default `https://prod.liiga-backend.liiga.fi/stats`), `LIIGA_API_KEY` (sent as the `x-api-key` header) and `LIIGA_SEASON` (the year the season ends: 2026–27 is `2027`). The API is only reachable from the network where its Swagger page opens.
 2. Run `python probe_api.py`. It finds the base URL that answers and saves sample responses to `api_samples/`.
 3. Run `python check_standings.py`. It compares the table computed from real results with the official Liiga table.
-4. Choose "Liiga API" in the sidebar. If anything fails, the app falls back to mock data and shows the error.
+4. Run `streamlit run app.py`. The app uses real Liiga data only; if the API can't be reached it shows the error instead of the app. Set `COMPANION_DATA=mock` in `.env` to work offline with the fictional demo season.
 
 `tests/test_liiga_api.py` checks the mapping against responses shaped like the API docs, including overtime, shootouts and cancelled games.
 

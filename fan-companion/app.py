@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import html
 import json
+import os
 
 import pandas as pd
 import streamlit as st
@@ -69,20 +70,23 @@ def render_reply(reply, receipts: bool = True):
                        "Sentences without numbers are the companion's opinion.")
 
 
+# ---------- league data ----------------------------------------------------
+# Real Liiga data only. COMPANION_DATA=mock is kept for offline development and tests.
+source = os.getenv("COMPANION_DATA", "liiga").lower()
+try:
+    snap = load_snapshot(source)
+except Exception as e:  # API unreachable or changed
+    st.error(f"Could not load data from the Liiga API: {e}")
+    st.caption("Check that this computer or server can reach the Liiga API (try `python probe_api.py`), "
+               "then reload the page.")
+    st.stop()
+odds = season_odds(source)
+
 # ---------- sidebar --------------------------------------------------------
 with st.sidebar:
     st.markdown('<div class="brand"><span class="brand-mark">↗</span><span>FAN<span class="brand-thin">'
                 'COMPANION</span><span class="dot">.</span></span></div>', unsafe_allow_html=True)
-    st.caption("Kaleva Media · AI sports companion prototype")
-
-    source_label = st.radio("Data source", ["Mock data (demo)", "Liiga API"], horizontal=True)
-    source = "liiga" if source_label == "Liiga API" else "mock"
-    try:
-        snap = load_snapshot(source)
-    except Exception as e:  # API not configured / unreachable
-        st.error(f"Liiga API not available ({e}). Using mock data.")
-        source, snap = "mock", load_snapshot("mock")
-    odds = season_odds(source)
+    st.caption(f"Kaleva Media · AI sports companion prototype · Data: {snap.source}")
 
     team_ids = sorted(snap.teams, key=snap.name)
     prof["name"] = st.text_input("Your name", prof.get("name", ""))
@@ -105,8 +109,8 @@ with st.sidebar:
     backend = llm_backend()
     use_ai = st.toggle("Use AI model", value=backend is not None, disabled=backend is None)
     if backend is None:
-        st.caption("No API key found, so answers use offline templates. Add ANTHROPIC_API_KEY or "
-                   "OPENAI_API_KEY to `.env` for full AI answers.")
+        st.caption("No API key found, so answers use offline templates. Add GEMINI_API_KEY, "
+                   "ANTHROPIC_API_KEY or OPENAI_API_KEY to `.env` for full AI answers.")
     else:
         st.caption(f"Engine: {backend.name}")
     if prof["language"] == "Suomi" and not (backend and use_ai):
