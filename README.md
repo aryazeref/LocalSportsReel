@@ -127,15 +127,52 @@ automated test suite.
 4. Open `backend/app/main.py`: HTTP routes make those functions available to Next.js.
 5. Open `frontend/app/page.tsx`: React state calls the API and renders moments.
 
-**Optional LLM:** Set `OPENAI_API_KEY` in the *backend process environment* (do not put it in Next.js, Git, or browser code). You can also set `OPENAI_MODEL`. Without a key, the app works offline using verified templates. With a key, the output is marked `review_required`; structured output and evidence IDs do **not** guarantee full factual validity. Editorial review is still mandatory.
+**Optional LLM:** Story drafting supports Gemini or OpenAI. Calculations and
+Liiga data do not need either provider. These drafts still describe the
+**fictional homepage moments**, not real Liiga matches or predictions.
 
-Example on Linux/macOS (run before launching uvicorn):
-```bash
-export OPENAI_API_KEY="your-secret-key"
-export OPENAI_MODEL="gpt-4.1-mini"
+For Gemini, get a key from [Google AI Studio](https://aistudio.google.com/apikey).
+Check the selected model's current [pricing](https://ai.google.dev/gemini-api/docs/pricing)
+and [rate limits](https://ai.google.dev/gemini-api/docs/rate-limits): free-tier
+availability depends on model, account eligibility, and quota. The application
+does not select your Google billing tier or guarantee free usage. Do not enable
+paid billing if you intend to use only the available free tier.
+
+Create or edit your ignored `backend/.env` locally (never commit or share keys):
+
+```ini
+LLM_PROVIDER=gemini
+GEMINI_API_KEY=your_gemini_key_here
+GEMINI_MODEL=gemini-2.5-flash
 ```
 
-**Windows PowerShell:** `$env:OPENAI_API_KEY="your-secret-key"`.
+The model is configurable; use a currently available model supporting structured
+JSON output if Google changes model availability. Restart the backend from its
+directory with explicit environment-file loading:
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000 --env-file .env
+```
+
+On Linux/macOS, use `.venv/bin/python -m uvicorn app.main:app --reload --port 8000 --env-file .env`.
+
+For OpenAI instead, set `LLM_PROVIDER=openai`, `OPENAI_API_KEY`, and optionally
+`OPENAI_MODEL=gpt-4.1-mini`. If `LLM_PROVIDER` is absent, the existing OpenAI
+behavior is preserved. Set `LLM_PROVIDER=template` to make no LLM calls even if
+keys are present. The checked-in `.env.example` defaults to template mode.
+Selecting Gemini never falls back to OpenAI or uses an OpenAI key.
+
+Test with **Explore story** on the homepage or `POST /api/stories/oulu-001` in
+`/docs`. A valid generated response has `mode=llm_draft` and
+`publication_status=review_required`. Missing keys, rate limits, provider errors,
+incomplete JSON, or invalid fact references use the existing template fallback
+(`mode=template`). Failures log only their exception class, not keys or response
+bodies. Template fallback does not prove the provider request succeeded.
+
+Both providers must return a headline, narration, and supplied fact IDs. Schema
+and ID checks do **not** guarantee factual accuracy; editorial review is still
+required. Real-provider calls require a key and network access to
+`generativelanguage.googleapis.com` for Gemini or `api.openai.com` for OpenAI.
 
 ## Step 5 — Upcoming milestones
 

@@ -9,10 +9,13 @@ An LLM never determines the actual match result; it only rephrases supplied
 facts. Any LLM output remains a draft requiring a human editor.
 """
 import math
-import os
+import logging
 from datetime import datetime, timezone
 from .data import CITIES, load_moments
-from .models import Moment, FeedMoment, FeedResponse, Story, DraftText
+from .models import Moment, FeedMoment, FeedResponse, Story
+from .services.story_llm import generate_draft
+
+logger = logging.getLogger(__name__)
 
 # This function calculates the great-circle distance between two points on the Earth using the Haversine formula. The coordinates are provided in decimal degrees, and the result is returned in kilometers.
 # This is used to filter sports moments based on their proximity to a specified city within a given radius.
@@ -97,30 +100,15 @@ def template_story(moment: Moment) -> Story:
 def create_story(moment_id: str) -> Story:
     """Optional LLM drafting with schema and provenance checks.
 
-Set OPENAI_API_KEY in your backend environment to use the LLM. When unset,
-return the deterministic version. Never silently invent an official report.
+Select Gemini or OpenAI in your backend environment to use an LLM. Without
+a configured key, return the deterministic version. Never invent a report.
 """
     moment = find_moment(moment_id)
-    if not os.environ.get("OPENAI_API_KEY"):
-        return template_story(moment)
-
-    from openai import OpenAI  # Import only if configured; offline demo stays light.
-    client = OpenAI()
     try:
-        response = client.responses.parse(
-            model=os.environ.get("OPENAI_MODEL", "gpt-4.1-mini"),
-            instructions=(
-                "You are a sports newsroom DRAFT writer. Use only supplied facts. "
-                "Do not invent details, quotes, skill judgments, video descriptions, "
-                "statistics, or future outcomes. The data is synthetic. Keep it "
-                "clearly labeled fictional. Write a punchy headline and a short "
-                "two-sentence narration. Cite the fact IDs you relied on."
-            ),
-            input=(f"Synthetic sports moment: {moment.model_dump_json()}"),
-            text_format=DraftText,
-        )
-        draft = response.output_parsed
-        if draft is None or not draft.used_fact_ids:
+        draft = generate_draft(moment)
+        if draft is None:
+            return template_story(moment)
+        if not draft.used_fact_ids:
             raise ValueError("Model provided no grounded facts")
         allowed_ids = {f.id for f in moment.facts}
         if not set(draft.used_fact_ids).issubset(allowed_ids):
@@ -133,6 +121,8 @@ return the deterministic version. Never silently invent an official report.
                      evidence=[f for f in moment.facts if f.id in draft.used_fact_ids],
                      mode="llm_draft", publication_status="review_required",
                      disclaimer="AI-generated draft from synthetic data. Human review required.")
-    except Exception:
+    except Exception as error:
+        # Never log keys, provider response bodies, or full request objects.
+        logger.warning("Story drafting failed (%s); using a template", type(error).__name__)
         # A failed AI service must not prevent users from seeing a grounded story.
         return template_story(moment)
