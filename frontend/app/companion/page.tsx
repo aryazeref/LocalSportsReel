@@ -88,7 +88,9 @@ export default function CompanionPage() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
   const [script, setScript] = useState<CompanionReply | null>(null);
-  const [hasSpeech, setHasSpeech] = useState(false);
+  // Speech support is only relevant after the client opens Podcast.
+  // Initial SSR and hydration both render the Chat tab.
+  const hasSpeech = typeof window !== "undefined" && "speechSynthesis" in window;
   const [forecast, setForecast] = useState<Forecast | null>(null);
   const [forecastModel, setForecastModel] = useState("");
   const [forecastLoading, setForecastLoading] = useState(false);
@@ -140,6 +142,8 @@ export default function CompanionPage() {
     setMessages([]);
     setScript(null);
     setForecast(null);
+    setForecastLoading(true);
+    setForecastError("");
     setSending(false);
     setError("");
   }
@@ -192,9 +196,6 @@ export default function CompanionPage() {
   useEffect(() => {
     if (tab !== "tonight" || !teamId) return;
     const controller = new AbortController();
-    setForecastLoading(true);
-    setForecast(null);
-    setForecastError("");
     async function load() {
       try {
         const query = new URLSearchParams({ team_id: teamId, limit: "1" });
@@ -219,8 +220,6 @@ export default function CompanionPage() {
   useEffect(() => {
     if (tab !== "table" || season === null) return;
     const controller = new AbortController();
-    setStatsLoading(true);
-    setStatsError("");
     async function load() {
       try {
         const data = await jsonResponse<TeamStatsResponse>(
@@ -240,7 +239,6 @@ export default function CompanionPage() {
   }, [tab, season]);
 
   useEffect(() => {
-    setHasSpeech("speechSynthesis" in window);
     return () => { if ("speechSynthesis" in window) window.speechSynthesis.cancel(); };
   }, []);
 
@@ -304,7 +302,18 @@ export default function CompanionPage() {
         </div>
         <nav className={styles.tabs} aria-label="Companion sections">
           {TABS.map(key => <button key={key} aria-current={tab === key ? "page" : undefined}
-            onClick={() => setTab(key)}>{key === "table" ? "Teams" : key === "tonight" ? "Tonight" : key === "podcast" ? "Podcast" : "Chat"}</button>)}
+            onClick={() => {
+              setTab(key);
+              if (key === "tonight") {
+                setForecastLoading(true);
+                setForecastError("");
+                setForecast(null);
+              }
+              if (key === "table") {
+                setStatsLoading(true);
+                setStatsError("");
+              }
+            }}>{key === "table" ? "Teams" : key === "tonight" ? "Tonight" : key === "podcast" ? "Podcast" : "Chat"}</button>)}
         </nav>
 
         {tab === "chat" && <section className={styles.panel} aria-label="Chat with the companion">
