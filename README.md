@@ -1,5 +1,10 @@
 # Local SportsReel · Hackathon MVP 0.1
 
+> **Reel-first homepage:** The homepage displays a vertical goal-highlight player and a clip-specific comment column, using real Liiga goal metadata from `/api/liiga/discover`. No videos are included, so each reel shows "Video unavailable" until approved footage is connected. Comments remain private to your browser. See [setup and rights notes](docs/UNIFIED_PLATFORM.md).
+
+> **Unified demo:** The new Next.js `/companion` page combines the Python Fan Companion's fact-verified chat and briefings with existing FastAPI Liiga/prediction services. See [integration documentation](docs/UNIFIED_PLATFORM.md). The Streamlit prototype is retained but is no longer required to use the unified website.
+
+
 **Pitch:** Discover the best sports moments happening nearby, even if you don't normally follow a league. A bounded agent discovers and ranks local structured match events, validates provenance, and creates a short grounded story.
 
 > **Data sources:** The homepage remains a fictional sports-story demo. The separate `/liiga` page fetches real Liiga fixtures and results and displays backend-calculated team statistics. No real video clips or location tracking are included. Do not publish sample stories from the homepage as real news.

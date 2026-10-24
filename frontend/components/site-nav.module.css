@@ -100,7 +100,9 @@
   .brand { gap: var(--s2); font-size: 18px; letter-spacing: -.9px; }
   .brandMark { width: 28px; height: 28px; border-radius: var(--r-sm); }
   .brandMark svg { width: 20px; height: 20px; }
-  .links { gap: var(--s1); }
+  .links { gap: var(--s1); overflow-x: auto; justify-content: flex-start; padding-bottom: 4px; }
+  .links li { flex: 0 0 auto; }
+  .links .link { white-space: nowrap; font-size: 12px; }
   .links li { flex: 1; }
   .link { width: 100%; padding: 9px 10px; font-size: 14px; }
 }

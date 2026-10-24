@@ -91,6 +91,8 @@ class LiigaGame(BaseModel):
     venue: str | None = None
     city: str | None = None
     goal_events: list[LiigaGoalEvent] = Field(default_factory=list)
+    # Preserve regulation/overtime/shootout classification for companion standings.
+    finished_type: str | None = None
 
 
 class LiigaDatasetMetadata(BaseModel):
@@ -133,3 +135,16 @@ class LiigaTeamAnalysisResponse(LiigaDatasetMetadata, LiigaTeamStats):
     scope: Literal["regular_season_games_returned_by_provider"] = (
         "regular_season_games_returned_by_provider"
     )
+
+
+class LiigaDiscoveryResponse(LiigaDatasetMetadata):
+    """Balanced, factual match highlights for the Next.js home feed.
+
+    "Highlights" here means match summaries, never licensed video footage.
+    The same LiigaGame model powers /api/liiga/games and this route.
+    """
+    selected_city: str | None = None
+    cities: list[str]
+    live: list[LiigaGame]
+    recent: list[LiigaGame]
+    upcoming: list[LiigaGame]
