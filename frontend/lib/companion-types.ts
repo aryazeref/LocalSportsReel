@@ -1,5 +1,10 @@
 // Contracts shared by the Next.js Fan Companion screen and FastAPI's /api/companion routes.
 // Numeric forecasts come exclusively from the existing prediction service.
+export type CompanionAiStatus = {
+  available: boolean;
+  provider: string | null;
+  message: string;
+};
 export type CompanionTeam = { id: string; name: string; city: string };
 export type TeamsResponse = {
   season: number;
@@ -42,6 +47,8 @@ export type CompanionReply = {
   kind: "chat" | "brief" | "podcast";
   text: string;
   engine: string;
+  generation_mode: "ai" | "offline" | "fallback";
+  mode_message: string;
   verification_status: "verified" | "corrected" | "redacted";
   numbers_checked: number;
   receipts: FactReceipt[];

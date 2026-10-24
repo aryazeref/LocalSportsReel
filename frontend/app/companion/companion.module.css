@@ -76,3 +76,11 @@
 .page :is(button,select,textarea,input,summary,a):focus-visible { outline:2px solid var(--focus); outline-offset:3px; }
 @media(max-width:860px) { .layout { grid-template-columns:1fr; } .sidebar { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); } .sidebar h2,.sidebarLinks,.sidebar > .muted { grid-column:1/-1; } }
 @media(max-width:560px) { .hero { padding-top:32px; } .sidebar { display:flex; } .panel { padding:15px; } .teamBar { padding:16px; } .probabilities { grid-template-columns:1fr; } .tabs button { padding:12px 13px; } .userMessage,.assistantMessage { max-width:100%; } }
+
+/* Distinguish configured model generation from deterministic demo replies. */
+.aiStatus { border:1px solid var(--line-strong); background:var(--surface-2); border-radius:var(--r-sm); padding:12px; }
+.aiStatus strong { display:block; font-size:13px; color:var(--text); }
+.aiStatus p { margin:6px 0 0; font-size:12px; line-height:1.6; color:var(--muted); }
+.aiMode, .offlineMode { font-size:11px; font-weight:800; }
+.aiMode { color:var(--primary); }
+.offlineMode { color:var(--muted); }

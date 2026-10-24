@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import Link from "next/link";
-import type { ChatMessage, CompanionReply, CompanionTeam, TeamsResponse } from "../../lib/companion-types";
+import type { ChatMessage, CompanionAiStatus, CompanionReply, CompanionTeam, TeamsResponse } from "../../lib/companion-types";
 import type { Forecast, PredictionsResponse } from "../../lib/prediction-types";
 import styles from "./companion.module.css";
 
@@ -41,9 +41,13 @@ function Answer({ reply }: { reply: CompanionReply }) {
   return <div className={styles.answer}>
     <p className={styles.replyText}>{reply.text}</p>
     <div className={styles.meta}>
-      <span>{reply.engine}</span><span>Fact check: {reply.verification_status}</span>
+      <strong className={reply.generation_mode === "ai" ? styles.aiMode : styles.offlineMode}>
+        {reply.generation_mode === "ai" ? "AI-generated" : reply.generation_mode === "fallback" ? "Offline fallback" : "Offline demo"}
+      </strong>
+      <span>Facts: {reply.verification_status}</span>
     </div>
-    {reply.forecast_warning && <p className={styles.muted}>{reply.forecast_warning}</p>}
+    <p className={styles.muted}>{reply.mode_message}</p>
+    {reply.forecast_warning && <p className={styles.muted}>{reply.forecast_warning}</p>
     {reply.impact_warning && <p className={styles.muted}>{reply.impact_warning}</p>}
     {reply.impact && <div className={styles.forecastPreview}>
       <strong>What-if: expected season points</strong>
@@ -83,6 +87,8 @@ export default function CompanionPage() {
   const [persona, setPersona] = useState<"buddy" | "analyst" | "stats">("buddy");
   const [language, setLanguage] = useState<"English" | "Finnish">("English");
   const [useAi, setUseAi] = useState(false);
+  const [aiStatus, setAiStatus] = useState<CompanionAiStatus | null>(null);
+  const [aiStatusLoading, setAiStatusLoading] = useState(true);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -99,6 +105,33 @@ export default function CompanionPage() {
   const [statsError, setStatsError] = useState("");
   const [statsLoading, setStatsLoading] = useState(false);
   const sequence = useRef(0);
+
+  // The backend is the source of truth for AI availability. Enable model
+  // responses by default only when a server-side API key is configured.
+  useEffect(() => {
+    const controller = new AbortController();
+    async function loadAiStatus() {
+      try {
+        const status = await jsonResponse<CompanionAiStatus>(
+          await fetch(API + "/api/companion/status", { signal: controller.signal }),
+        );
+        if (controller.signal.aborted) return;
+        setAiStatus(status);
+        setUseAi(status.available);
+      } catch {
+        if (controller.signal.aborted) return;
+        setAiStatus({
+          available: false, provider: null,
+          message: "Cannot check AI configuration. Offline demo replies are available.",
+        });
+        setUseAi(false);
+      } finally {
+        if (!controller.signal.aborted) setAiStatusLoading(false);
+      }
+    }
+    void loadAiStatus();
+    return () => controller.abort();
+  }, []);
 
   // Read localStorage after hydration; never include browser-only state in SSR.
   useEffect(() => {
@@ -150,7 +183,7 @@ export default function CompanionPage() {
 
   const team = teams.find(item => item.id === teamId);
   async function ask(kind: "chat" | "brief" | "podcast", message = "") {
-    if (!teamId || sending || (kind === "chat" && !message.trim())) return;
+    if (!teamId || sending || aiStatusLoading || (kind === "chat" && !message.trim())) return;
     setSending(true);
     setError("");
     const current = ++sequence.current;
@@ -164,7 +197,7 @@ export default function CompanionPage() {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           team_id: teamId, season, kind, message: message.trim(),
-          persona, language, use_ai: useAi,
+          persona, language, use_ai: useAi && Boolean(aiStatus?.available),
           include_forecast: kind === "chat" &&
             /\b(predict|forecast|chances?|probabilit|win|lose|tonight|what if|what happens|impact|points)\b/i.test(message),
           include_impact: kind === "chat" &&
@@ -281,11 +314,15 @@ export default function CompanionPage() {
             <option value="English">English</option><option value="Finnish">Suomi</option>
           </select>
         </label>
-        <label className={styles.toggle}>
+        <div className={styles.aiStatus} role="status">
+          <strong>{aiStatusLoading ? "Checking AI…" : aiStatus?.available ? "AI chat configured" : "Offline demo mode"}</strong>
+          <p>{aiStatus?.message || "Checking the backend model configuration."}</p>
+        </div>
+        {aiStatus?.available && <label className={styles.toggle}>
           <input type="checkbox" checked={useAi} onChange={event => setUseAi(event.target.checked)} />
-          <span>Use configured AI model</span>
-        </label>
-        <p className={styles.muted}>Otherwise the companion uses its original fact-verified offline templates. AI credentials stay in FastAPI.</p>
+          <span>Use AI-generated replies</span>
+        </label>}
+        <p className={styles.muted}>AI requests go through our Python backend; private keys are never sent to the browser. Replies are fact-checked before display.</p>
         <nav className={styles.sidebarLinks} aria-label="Related pages">
           <Link href="/predictions">Full predictions ↗</Link>
           <Link href="/liiga">Liiga and Fan Zone ↗</Link>
@@ -322,7 +359,7 @@ export default function CompanionPage() {
               <h3>Hi! I follow {team?.name || "your team"}.</h3>
               <p>Ask about form, fixtures and experimental match predictions.</p>
               <div className={styles.chips}>
-                {PROMPTS.map(p => <button key={p} disabled={!teamId || sending}
+                {PROMPTS.map(p => <button key={p} disabled={!teamId || sending || aiStatusLoading}
                   onClick={() => void ask("chat", p)}>{p}</button>)}
               </div>
             </div>}
@@ -337,10 +374,10 @@ export default function CompanionPage() {
             <label htmlFor="fan-chat">Ask your companion</label>
             <textarea id="fan-chat" value={draft} rows={3} maxLength={1200}
               onChange={event => setDraft(event.target.value)}
-              placeholder="What happens if Kärpät wins?" disabled={sending || !teamId}/>
+              placeholder="What happens if Kärpät wins?" disabled={sending || !teamId || aiStatusLoading}/>
             <div className={styles.formActions}>
               <span>{draft.length}/1200</span>
-              <button type="submit" disabled={!draft.trim() || !teamId || sending}>Send ↗</button>
+              <button type="submit" disabled={!draft.trim() || !teamId || sending || aiStatusLoading}>Send ↗</button>
             </div>
           </form>
         </section>}
@@ -389,8 +426,8 @@ export default function CompanionPage() {
           <p className={styles.muted}>The Fan Companion writes fact-verified scripts.
             Your browser can read them aloud if a system voice is available.</p>
           <div className={styles.podcastButtons}>
-            <button disabled={!teamId || sending} onClick={() => void ask("brief")}>Daily briefing</button>
-            <button disabled={!teamId || sending} onClick={() => void ask("podcast")}>Podcast script</button>
+            <button disabled={!teamId || sending || aiStatusLoading} onClick={() => void ask("brief")}>Daily briefing</button>
+            <button disabled={!teamId || sending || aiStatusLoading} onClick={() => void ask("podcast")}>Podcast script</button>
           </div>
           {sending && <p role="status">Preparing and checking the script…</p>}
           {script && <div className={styles.script}>
