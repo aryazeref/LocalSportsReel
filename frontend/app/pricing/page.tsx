@@ -35,7 +35,7 @@ export default function PricingPage() {
         features={["Schedules and final results", "Liiga team statistics", "Basic match winner probabilities", "Preview of advanced analysis", "Planned: community features"]}
         actionLabel="Explore predictions" href="/predictions" />
       <PricingCard name="Single Report" price="€0.49" cadence="per match" description="Unlock one advanced report for a match you choose."
-        features={["Full probability breakdown", "Available forecast factors and context", "Match-specific league-impact scenarios", "Model methods, evaluation and limitations"]}
+        features={["Full probability breakdown", "How each possible result changes season projections", "Match-specific league-impact scenarios", "What it could mean for both teams and their rivals"]}
         actionLabel="Choose a match" href="/predictions#forecast-heading" />
       <PricingCard name="Premium" price="€4.99" cadence="/month" description="Unlimited access to currently implemented analysis."
         features={["Unlimited advanced match reports", "All implemented prediction features", "Unlimited league-impact simulations", "Planned: personalized AI and matchday experiences", "Planned: ad-free experience when ads exist"]}
