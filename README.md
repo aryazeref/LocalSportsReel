@@ -223,6 +223,47 @@ New endpoints:
   `simulated_started_games`. Invalid/unreconciled inputs return 409; unavailable
   data returns 502 and insufficient training history 503. No fabricated results.
 
+## Freemium demo access
+
+Open `/pricing` to compare the **Free (€0)**, **Single Report (€0.49 per match)**,
+and **Premium (€4.99/month)** tiers. On `/predictions`, every visitor can see
+the existing home/away match-winner probabilities. Choose a fixture to preview
+its advanced report, then use **Unlock report — €0.49** for that match or
+**Get Premium — €4.99/month** for unlimited current reports.
+
+The checkout is simulated: it explicitly states that no payment is collected.
+Confirming an individual report stores a season-qualified match ID in browser
+`localStorage`; Premium stores the demo plan there. Access survives refreshes in
+that browser. Use **Reset demo purchases** on Pricing or Predictions to return to
+Free and try the flows again. Browser storage errors or malformed data safely
+fall back to Free; the purchase remains available only for the current page
+session if storage writes are blocked.
+
+The report reuses the existing prediction and impact APIs. It does not change
+the model, probabilities, Liiga data or evaluation. If the backend does not
+provide advanced analysis, the page reports that data is unavailable. Every
+forecast remains experimental and subject to model and data uncertainty.
+
+Personalized AI analysis, personalized matchday experiences, ad-free viewing,
+and community features are planned; they are not implemented by this MVP.
+Premium currently unlocks only the advanced prediction and simulation features
+that already exist.
+
+**This is an interface demo, not paid-content security.** Anyone can edit or
+clear localStorage or call the API directly. Before real payments, add user
+accounts, a payment provider and verified webhook lifecycle, server-side
+entitlement records, and backend authorization checks before returning paid
+report data. Never rely on client-side state to protect paid content. No real
+payment processor, bookmaker, wager, or betting commission is connected.
+
+Freemium validation from `frontend`:
+
+```powershell
+npm test
+npm run lint
+npm run build
+```
+
 ## Step 4 — See how the agent works
 
 1. Open `backend/app/data.py` to inspect fake sports events and source facts.

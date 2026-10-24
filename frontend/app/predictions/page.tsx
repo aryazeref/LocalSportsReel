@@ -1,6 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import Link from "next/link";
+import DemoCheckout, { type CheckoutProduct } from "../../components/demo-checkout";
+import Paywall from "../../components/paywall";
+import { activateDemoPremium, hasReportAccess, purchaseDemoReport, reportId as getReportId, resetDemoPurchases } from "../../lib/entitlements";
+import { useEntitlements } from "../../lib/use-entitlements";
 import type { Forecast, ImpactResponse, ModelMetric, Outcome, PredictionsResponse } from "../../lib/prediction-types";
 import { emptyImpactSnapshot, impactSnapshotKey, parseImpactSnapshot, readStoredImpact,
   saveImpactSnapshot, subscribeImpactSnapshots, validImpact } from "../../lib/impact-snapshot";
@@ -112,7 +117,7 @@ function Notes({ items, title = "Data and model notes" }: { items: string[]; tit
   </details>;
 }
 
-function ForecastCard({ fixture, selected, onSelect }: { fixture: Forecast; selected: boolean; onSelect: () => void }) {
+function ForecastCard({ fixture, selected, unlocked, onSelect }: { fixture: Forecast; selected: boolean; unlocked: boolean; onSelect: () => void }) {
   const { probabilities, home_team: home, away_team: away } = fixture;
   return <article className={`${styles.fixtureCard} ${selected ? styles.selectedCard : ""}`}>
     <button className={styles.fixtureChoice} onClick={onSelect} aria-pressed={selected}
@@ -122,14 +127,15 @@ function ForecastCard({ fixture, selected, onSelect }: { fixture: Forecast; sele
       <span className={styles.winNumbers}><span>{percent(probabilities.home_win)}</span><span>{percent(probabilities.away_win)}</span></span>
       <span className={styles.winBar} aria-hidden="true"><span style={{ width: percent(probabilities.home_win, 4) }} /></span>
       <span className={styles.winLabels}><span>Home win</span><span>Away win</span></span>
-      <span className={styles.explore}>{selected ? "Viewing league impact" : "Explore league impact"}<span aria-hidden="true">↗</span></span>
+      <span className={styles.explore}>{unlocked ? (selected ? "Viewing advanced report" : "Open advanced report")
+        : selected ? "View report preview" : "Preview advanced report"}<span aria-hidden="true">↗</span></span>
     </button>
-    <dl className={styles.outcomeBreakdown}>
+    {unlocked && <dl className={styles.outcomeBreakdown}>
       {OUTCOMES.map(outcome => <div key={outcome}><dt>{OUTCOME_LABELS[outcome]}</dt><dd>{percent(probabilities[outcome])}</dd></div>)}
-    </dl>
+    </dl>}
     <p className={styles.cardFootnote}>{fixture.features?.cold_start
       ? "Limited team history · interpret cautiously"
-      : "Final-win chances include overtime and shootouts"}</p>
+      : unlocked ? "Final-win chances include overtime and shootouts" : "Advanced outcome breakdown available in the full report"}</p>
   </article>;
 }
 
@@ -148,6 +154,9 @@ function MetricTable({ metrics, selected, rolling = false }: { metrics: ModelMet
 }
 
 export default function PredictionsPage() {
+  const entitlements = useEntitlements();
+  const [checkoutProduct, setCheckoutProduct] = useState<CheckoutProduct | null>(null);
+  const [accessNotice, setAccessNotice] = useState("");
   const [reload, setReload] = useState(0);
   const [forecastResult, setForecastResult] = useState<{
     key: number; data: PredictionsResponse | null; error: string | null;
@@ -187,6 +196,9 @@ export default function PredictionsPage() {
   }, [reload]);
 
   const fixture = data?.fixtures.find(item => item.game_id === selectedGame);
+  // Season plus game ID prevents a report unlock carrying over to another season.
+  const selectedReportId = fixture ? getReportId(fixture.season, fixture.game_id) : null;
+  const selectedReportUnlocked = selectedReportId ? hasReportAccess(entitlements, selectedReportId) : false;
   const forecastVersion = data?.generated_at;
   const modelVersion = data?.model.model_version;
   const snapshotContext = useMemo(() => fixture && modelVersion ? {
@@ -200,14 +212,15 @@ export default function PredictionsPage() {
   const savedImpact = useMemo(() => snapshotContext ? parseImpactSnapshot(storedSnapshot, snapshotContext) : null,
     [snapshotContext, storedSnapshot]);
   const impactRequestKey = JSON.stringify([selectedGame, topN, forecastVersion, modelVersion, impactRetry]);
-  const canLoadImpact = selectedGame != null && Boolean(forecastVersion);
+  // Keep the existing simulation API behind the same demo access rule as its report UI.
+  const canLoadImpact = selectedGame != null && Boolean(forecastVersion) && selectedReportUnlocked;
   const impactLoading = canLoadImpact && impactResult?.key !== impactRequestKey;
   const impact = canLoadImpact && impactResult?.key === impactRequestKey ? impactResult.data : null;
   const impactError = canLoadImpact && impactResult?.key === impactRequestKey ? impactResult.error : null;
 
   useEffect(() => {
     const controller = new AbortController();
-    if (selectedGame == null || !forecastVersion || !snapshotContext) return () => controller.abort();
+    if (selectedGame == null || !forecastVersion || !snapshotContext || !selectedReportUnlocked) return () => controller.abort();
     const context = snapshotContext;
     async function loadImpact() {
       try {
@@ -229,7 +242,7 @@ export default function PredictionsPage() {
     }
     void loadImpact();
     return () => controller.abort();
-  }, [selectedGame, topN, forecastVersion, modelVersion, impactRetry, impactRequestKey, snapshotContext]);
+  }, [selectedGame, topN, forecastVersion, modelVersion, impactRetry, impactRequestKey, snapshotContext, selectedReportUnlocked]);
 
   const activeImpact = impact ?? savedImpact;
   const showingSnapshot = Boolean(activeImpact && (!impact || loading || error));
@@ -251,6 +264,23 @@ export default function PredictionsPage() {
   const topOptions = [...new Set([1, 4, 8, 12, 16, topN])].filter(value => !teamCount || value <= teamCount).sort((a, b) => a - b);
   const visibleFixtures = showAllFixtures ? data?.fixtures ?? [] : (data?.fixtures ?? []).slice(0, 6);
 
+  function confirmCheckout(product: CheckoutProduct) {
+    // The checkout only updates the shared browser store; it never contacts a payment service.
+    if (product.kind === "report") {
+      purchaseDemoReport(product.reportId);
+      setAccessNotice(`${product.title} is unlocked in this browser.`);
+    } else {
+      activateDemoPremium();
+      setAccessNotice("Premium demo access is active. All current reports are unlocked in this browser.");
+    }
+    setCheckoutProduct(null);
+  }
+
+  function resetAccess() {
+    resetDemoPurchases();
+    setAccessNotice("Demo purchases reset. Free access is active.");
+  }
+
   return <main className={styles.page}>
     <header className={styles.header}>
       <div><p className={styles.eyebrow}>BEFORE THE BUZZER · LIIGA FORECASTS</p>
@@ -264,6 +294,14 @@ export default function PredictionsPage() {
         </button>
       </div>
     </header>
+
+    <div className={styles.demoAccessBar}>
+      <span className={styles.accessStatus}>Demo access: {entitlements.plan === "premium" ? "Premium · all current advanced reports unlocked"
+        : `Free${entitlements.purchasedReportIds.length ? ` · ${entitlements.purchasedReportIds.length} report${entitlements.purchasedReportIds.length === 1 ? "" : "s"} unlocked` : ""}`}</span>
+      {accessNotice && <span className={styles.accessNotice} role="status">{accessNotice}</span>}
+      <Link href="/pricing">View plans</Link>
+      <button type="button" onClick={resetAccess}>Reset demo purchases</button>
+    </div>
 
     {loading && <div role="status" className={styles.loading}><span className={styles.spinner} aria-hidden="true" />
       <div><strong>Preparing the next matchday</strong><p>The first visit may take a minute while historical results and model comparisons are prepared.</p></div>
@@ -286,7 +324,8 @@ export default function PredictionsPage() {
           <span className={styles.sectionTag}>WIN PROBABILITIES</span></div>
         {data.fixtures.length === 0 && <p className={styles.notice}>No upcoming matches are available for prediction. Completed and live games are not shown as pre-match forecasts.</p>}
         <div className={styles.fixtureGrid}>{visibleFixtures.map(item => <ForecastCard key={`${item.season}-${item.game_id}`} fixture={item}
-          selected={item.game_id === selectedGame} onSelect={() => setSelectedGame(item.game_id)} />)}</div>
+          selected={item.game_id === selectedGame} unlocked={hasReportAccess(entitlements, getReportId(item.season, item.game_id))}
+          onSelect={() => setSelectedGame(item.game_id)} />)}</div>
         {data.fixtures.length > 6 && <button className={styles.showMore} onClick={() => setShowAllFixtures(value => !value)}>
           {showAllFixtures ? "Show fewer matches" : `Show all ${data.fixtures.length} matches`} <span aria-hidden="true">{showAllFixtures ? "−" : "+"}</span>
         </button>}
@@ -296,9 +335,12 @@ export default function PredictionsPage() {
       <section id="scenario-section" className={styles.scenarioSection} aria-labelledby="scenario-heading">
         <div className={styles.sectionHeading}><div><p className={styles.eyebrow}>ONE RESULT. EVERY RIVAL.</p><h2 id="scenario-heading">Explore the ripple effect</h2></div>
           <span className={styles.sectionTag}>WHAT IF?</span></div>
+        {fixture && !selectedReportUnlocked && <Paywall matchup={`${fixture.home_team.name} vs ${fixture.away_team.name}`}
+          onUnlockReport={() => setCheckoutProduct({ kind: "report", title: `${fixture.home_team.name} vs ${fixture.away_team.name}`, reportId: selectedReportId as string })}
+          onGetPremium={() => setCheckoutProduct({ kind: "premium", title: "Unlimited reports and simulations" })} />}
+        {!fixture && <p className={styles.notice}>Select an upcoming fixture to preview its advanced report.</p>}
+        {fixture && selectedReportUnlocked && <>
         <p className={styles.scope}>Regular-season points projections. Tied teams have probability ranges; official tie-breakers and playoff rules are not included.</p>
-        {!fixture && <p className={styles.notice}>Select an upcoming fixture to explore its effect on the points race.</p>}
-        {fixture && <>
           <div className={styles.scenarioControls}>
             <div><span className={styles.controlLabel}>Selected match</span><h3>{fixture.home_team.name} <span>vs</span> {fixture.away_team.name}</h3>
               <p>{dateLabel(fixture.start)}</p></div>
@@ -383,6 +425,7 @@ export default function PredictionsPage() {
         </>}
       </section>
 
+      {selectedReportUnlocked && <>
       <section className={styles.evidenceSection} aria-labelledby="evidence-heading">
         <div className={styles.sectionHeading}><div><p className={styles.eyebrow}>THE EVIDENCE BEHIND THE ESTIMATE</p><h2 id="evidence-heading">Historical evidence</h2></div>
           <span className={styles.sectionTag}>HISTORICAL EVALUATION</span></div>
@@ -424,7 +467,9 @@ export default function PredictionsPage() {
         </details>}
         <Notes items={data.evaluation.limitations ?? []} title="Evaluation limitations" />
       </section>
+      </>}
       <footer className={styles.footer}><span>LocalSportsReel · Predictions with context.</span><span>Statistical forecasts · No LLM key required</span></footer>
     </>}
+    <DemoCheckout product={checkoutProduct} onClose={() => setCheckoutProduct(null)} onConfirm={confirmCheckout} />
   </main>;
 }
