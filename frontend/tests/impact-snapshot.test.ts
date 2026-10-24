@@ -102,6 +102,29 @@ test("roundtrip retains the complete successful table and all four scenarios", (
   assert.equal(emptyImpactSnapshot(), "");
 });
 
+test("reconstructed standings retain their cutoff and replay metadata in saved tables", () => {
+  const value = impact();
+  value.standings_basis = "completed_results_snapshot";
+  value.standings_as_of = "2026-10-23T21:00:00Z";
+  value.simulated_started_games = 2;
+  saveImpactSnapshot(context(), value);
+  assert.deepEqual(parseImpactSnapshot(readStoredImpact(impactSnapshotKey(context())), context()), value);
+});
+
+test("unknown or incomplete reconstructed standings metadata is rejected", () => {
+  const missing = { ...impact(), standings_basis: "completed_results_snapshot" };
+  assert.equal(validImpact(missing, context()), false);
+  assert.equal(validImpact({ ...impact(), standings_basis: "live" }, context()), false);
+  for (const metadata of [
+    { standings_as_of: "invalid", simulated_started_games: 2 },
+    { standings_as_of: "2027-01-01T00:00:00Z", simulated_started_games: 2 },
+    { standings_as_of: "2026-10-23T21:00:00Z", simulated_started_games: -1 },
+    { standings_as_of: "2026-10-23T21:00:00Z", simulated_started_games: 11 },
+  ]) {
+    assert.equal(validImpact({ ...missing, ...metadata }, context()), false);
+  }
+});
+
 test("corrupt JSON, unsupported versions, and missing envelopes are ignored", () => {
   for (const raw of ["{", "null", "[]", "{}", JSON.stringify(impact()), envelope(impact(), 2)]) {
     assert.equal(parseImpactSnapshot(raw, context()), null);

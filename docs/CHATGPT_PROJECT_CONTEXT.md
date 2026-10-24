@@ -53,12 +53,17 @@ Four modelled outcomes: home regulation win, home extra-time/shootout win,
 away extra-time/shootout win, away regulation win. Current verified Liiga points
 awards are respectively 3–0, 2–1, 1–2, 0–3.
 
-Official current standings must reconcile with completed match results before
-simulations run. Future strengths are frozen within simulations. Exact current
+Normal scenarios reconcile official current standings with completed results.
+During today's live/started games, a first request can reconstruct standings
+from real completed results before Helsinki midnight and simulate all matches
+from that cutoff, including today's already-started/finished games. The UI labels
+this pre-game snapshot and ignores live scores and today's final results.
+Future strengths are frozen within simulations. Exact current
 season tie-break/playoff rules have not been verified. The UI therefore reports
 points-only rank midpoints and top-N lower/upper ranges for unresolved ties.
 These are not exact qualification, relegation or championship probabilities.
-Scenarios pause for live/unresolved matches or inconsistent provider snapshots.
+Unresolved older fixtures, invalid teams/results, and inconsistent official
+snapshots outside pre-game snapshot mode still block scenarios.
 
 ## Data and configuration
 

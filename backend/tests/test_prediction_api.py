@@ -206,6 +206,143 @@ def test_unresolved_schedule_pauses_scenarios_but_not_forecasts(client, controll
     assert client.get("/api/liiga/predictions").status_code == 200
 
 
+@pytest.mark.parametrize('status', ['live', 'upcoming'])
+def test_today_started_game_uses_completed_results_snapshot_on_first_request(client, controlled_context, monkeypatch, status):
+    started = replace(game(200, '2026-10-24T08:00:00+00:00'), status=status,
+                      home_goals=5, away_goals=4, home_expected_goals=8.5)
+    controlled_context.current = snapshot([*controlled_context.current.matches, started])
+    async def no_official_table(season):
+        pytest.fail('A reconstructed snapshot must not depend on the updating official table')
+    monkeypatch.setattr(data, 'load_standings', no_official_table)
+    response = client.get('/api/liiga/predictions/100/impact?top_n=2&simulations=1000')
+    assert response.status_code == 200
+    result = response.json()
+    assert result['standings_basis'] == 'completed_results_snapshot'
+    assert result['standings_as_of'] == '2026-10-23T21:00:00Z'
+    assert result['simulated_started_games'] == 1
+    assert result['remaining_fixtures'] == 4
+    assert sum(team['current_points'] for team in result['baseline']) == 6
+    assert sum(team['expected_points'] for team in result['baseline']) == pytest.approx(18)
+    for scenario in result['scenarios']:
+        assert sum(team['expected_points'] for team in scenario['teams']) == pytest.approx(18)
+    assert controlled_context.bundle.calls[-1][1] == datetime(2026, 10, 23, 21, tzinfo=timezone.utc)
+    assert (2027, 200) in controlled_context.bundle.calls[-1][0]
+    assert controlled_context.current.matches[-1] == started  # Original provider record is untouched.
+    assert not any('Official points were reconciled' in warning for warning in result['warnings'])
+
+
+def test_finished_today_is_replayed_once_and_its_outcome_cannot_affect_snapshot(client, controlled_context):
+    live = replace(game(200, '2026-10-24T08:00:00+00:00'), status='live')
+    finished = game(201, '2026-10-24T06:00:00+00:00', home='2', away='3', outcome=0)
+    controlled_context.current = snapshot([*controlled_context.current.matches, finished, live])
+    controlled_context.history.append(finished)  # Defense against accidentally supplied same-day history.
+    first = client.get('/api/liiga/predictions/100/impact?top_n=2&simulations=1000')
+    assert first.status_code == 200
+    result = first.json()
+    assert result['remaining_fixtures'] == 5 and result['simulated_started_games'] == 2
+    assert sum(team['current_points'] for team in result['baseline']) == 6
+    assert sum(team['expected_points'] for team in result['baseline']) == pytest.approx(21)
+    changed = game(201, '2026-10-24T06:00:00+00:00', home='2', away='3', outcome=3)
+    controlled_context.current = snapshot([*controlled_context.current.matches[:-2], changed, live], 'changed-today-outcome')
+    controlled_context.history[-1] = changed
+    second = client.get('/api/liiga/predictions/100/impact?top_n=2&simulations=1000')
+    assert second.status_code == 200
+    assert second.json()['baseline'] == result['baseline']
+    assert second.json()['scenarios'] == result['scenarios']
+
+
+def test_snapshot_prediction_copies_clear_scores_and_only_include_earlier_history(client, controlled_context, monkeypatch):
+    live = replace(game(200, '2026-10-24T08:00:00+00:00'), status='live', home_goals=9,
+                   away_goals=0, home_expected_goals=12.0, away_expected_goals=0.1)
+    today_finished = game(201, '2026-10-24T06:00:00+00:00', outcome=1)
+    controlled_context.current = snapshot([*controlled_context.current.matches, today_finished, live])
+    controlled_context.history.append(today_finished)
+    original_predict = controlled_context.bundle.predict_many
+    def checked_predict(history, fixtures, *, cutoff=None):
+        assert all(match.start < cutoff for match in history)
+        for match in fixtures:
+            assert match.status == 'upcoming'
+            assert all(getattr(match, field) is None for field in (
+                'home_goals', 'away_goals', 'home_regulation_goals', 'away_regulation_goals',
+                'finish_type', 'home_expected_goals', 'away_expected_goals'))
+        return original_predict(history, fixtures, cutoff=cutoff)
+    monkeypatch.setattr(controlled_context.bundle, 'predict_many', checked_predict)
+    assert client.get('/api/liiga/predictions/100/impact?top_n=2').status_code == 200
+
+
+@pytest.mark.parametrize('kind', ['old_unfinished', 'old_invalid', 'unknown_team', 'duplicate_team', 'duplicate_match'])
+def test_live_snapshot_still_rejects_incomplete_inputs(client, controlled_context, kind):
+    live = replace(game(200, '2026-10-24T08:00:00+00:00'), status='live')
+    records = [*controlled_context.current.matches, live]
+    if kind == 'old_unfinished':
+        records.append(game(201, '2026-10-23T08:00:00+00:00'))
+    elif kind == 'old_invalid':
+        records[0] = replace(records[0], home_regulation_goals=None)
+    elif kind == 'unknown_team':
+        records.append(replace(upcoming_games()[0], game_id=201, home_id=''))
+    elif kind == 'duplicate_team':
+        records.append(replace(upcoming_games()[0], game_id=201, away_id='1'))
+    else:
+        records.append(live)
+    controlled_context.current = snapshot(records)
+    response = client.get('/api/liiga/predictions/100/impact?top_n=2')
+    assert response.status_code == 409
+    assert 'snapshot cannot be calculated' in response.json()['detail']
+    assert controlled_context.bundle.calls == []
+
+
+def test_first_live_snapshot_supports_top_sixteen_in_seventeen_team_league(client, controlled_context):
+    records = [*controlled_context.current.matches,
+               replace(game(200, '2026-10-24T08:00:00+00:00'), status='live')]
+    records.extend(game(300 + team, '2026-10-28T15:00:00+00:00', home=str(team), away='1')
+                   for team in range(4, 18))
+    controlled_context.current = snapshot(records)
+    response = client.get('/api/liiga/predictions/100/impact?top_n=16&simulations=1000')
+    assert response.status_code == 200
+    result = response.json()
+    assert len(result['baseline']) == 17 and result['top_n'] == 16
+    assert result['standings_basis'] == 'completed_results_snapshot'
+    assert all(team['current_points'] == 0 for team in result['baseline'] if int(team['team_id']) >= 4)
+
+
+@pytest.mark.parametrize('now', [
+    datetime(2026, 10, 24, 21, 30, tzinfo=timezone.utc),  # Already October 25 in Helsinki.
+    datetime(2026, 10, 25, 12, tzinfo=timezone.utc),  # DST ended after local midnight.
+])
+def test_snapshot_cutoff_uses_helsinki_midnight_across_utc_day_and_dst(client, controlled_context, now):
+    controlled_context.now = now
+    live = replace(game(200, '2026-10-24T21:15:00+00:00'), status='live')
+    controlled_context.current = snapshot([*controlled_context.current.matches, live])
+    result = client.get('/api/liiga/predictions/100/impact?top_n=2&simulations=1000')
+    assert result.status_code == 200
+    assert result.json()['standings_as_of'] == '2026-10-24T21:00:00Z'
+
+
+def test_selected_started_match_remains_unavailable_even_when_other_games_use_snapshot(client, controlled_context):
+    live = replace(game(200, '2026-10-24T08:00:00+00:00'), status='live')
+    controlled_context.current = snapshot([*controlled_context.current.matches, live])
+    assert client.get('/api/liiga/predictions/200/impact?top_n=2').status_code == 404
+
+
+def test_snapshot_top_n_validation_happens_before_predicting(client, controlled_context):
+    live = replace(game(200, '2026-10-24T08:00:00+00:00'), status='live')
+    controlled_context.current = snapshot([*controlled_context.current.matches, live])
+    response = client.get('/api/liiga/predictions/100/impact?top_n=4')
+    assert response.status_code == 422
+    assert controlled_context.bundle.calls == []
+
+
+@pytest.mark.parametrize('status', ['live', 'finished'])
+def test_live_snapshot_rejects_future_games_with_started_or_finished_flags(client, controlled_context, status):
+    live = replace(game(200, '2026-10-24T08:00:00+00:00'), status='live')
+    contradictory = replace(game(201, '2026-10-25T18:00:00+00:00', outcome=0), status=status)
+    controlled_context.current = snapshot([*controlled_context.current.matches, live, contradictory])
+    response = client.get('/api/liiga/predictions/100/impact?top_n=2')
+    assert response.status_code == 409
+    assert 'future fixture is marked as started or finished' in response.json()['detail']
+    assert controlled_context.bundle.calls == []
+
+
 def test_mismatched_official_table_is_not_simulated(client, controlled_context, monkeypatch):
     async def altered_standings(season):
         rows = official_standings()

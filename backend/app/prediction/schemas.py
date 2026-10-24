@@ -1,7 +1,7 @@
 """HTTP response contracts for forecasts and bounded points scenarios."""
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -102,6 +102,9 @@ class ImpactResponse(BaseModel):
     game_id: int
     generated_at: datetime
     standings_updated_at: datetime
+    standings_basis: Literal['official', 'completed_results_snapshot'] = 'official'
+    standings_as_of: datetime | None = None
+    simulated_started_games: int = Field(default=0, ge=0)
     model_name: str
     model_version: str
     forecast_cutoff: str

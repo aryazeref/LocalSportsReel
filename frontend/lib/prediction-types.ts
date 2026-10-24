@@ -120,6 +120,9 @@ export type ImpactResponse = {
   game_id: number;
   generated_at: string;
   standings_updated_at: string;
+  standings_basis?: "official" | "completed_results_snapshot";
+  standings_as_of?: string | null;
+  simulated_started_games?: number;
   model_name: string;
   model_version: string;
   forecast_cutoff: string;

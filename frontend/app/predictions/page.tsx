@@ -233,6 +233,8 @@ export default function PredictionsPage() {
 
   const activeImpact = impact ?? savedImpact;
   const showingSnapshot = Boolean(activeImpact && (!impact || loading || error));
+  const reconstructedStandings = activeImpact?.standings_basis === "completed_results_snapshot";
+  const historicalTable = showingSnapshot || reconstructedStandings;
   const scenario = activeImpact?.scenarios.find(item => item.outcome === selectedOutcome);
   const baseline = [...(activeImpact?.baseline ?? [])].sort((a, b) => a.expected_rank - b.expected_rank || a.name.localeCompare(b.name));
   const scenarioByTeam = new Map((scenario?.teams ?? []).map(team => [team.team_id, team]));
@@ -315,13 +317,18 @@ export default function PredictionsPage() {
             </button>)}
           </div>
 
-          {showingSnapshot && activeImpact && <div role="status" className={styles.snapshotNotice}>
-            <strong>Last saved calculation · not live standings</strong>
-            <p>Calculated {dateLabel(activeImpact.generated_at)} · Standings fetched {dateLabel(activeImpact.standings_updated_at)} (Helsinki time).
-              {impactLoading || loading ? " Updating; keeping the previous table visible."
-                : impactError ? ` ${impactError}` : " The latest forecasts could not be refreshed."}</p>
-            <p>This saved table includes all four outcome scenarios from that calculation.</p>
-            <button className={styles.textButton} disabled={impactLoading || loading} onClick={() => setImpactRetry(value => value + 1)}>Retry league impact</button>
+          {historicalTable && activeImpact && <div role="status" className={styles.snapshotNotice}>
+            <strong>{showingSnapshot ? "Last saved calculation · not live standings" : "Pre-game standings snapshot · not live standings"}</strong>
+            <p>Calculated {dateLabel(activeImpact.generated_at)} · {reconstructedStandings ? "Match data" : "Standings"} fetched {dateLabel(activeImpact.standings_updated_at)} (Helsinki time).</p>
+            {reconstructedStandings && <p>Points are reconstructed from real completed results before {dateLabel(activeImpact.standings_as_of)} (Helsinki time).
+              All matches from that cutoff onward are simulated, including {activeImpact.simulated_started_games} already-started matches.
+              Their live scores and today&apos;s final results are not used. This is a pre-game projection, not a live forecast.</p>}
+            {showingSnapshot && <>
+              <p>{impactLoading || loading ? "Updating; keeping the previous table visible."
+                : impactError || "The latest forecasts could not be refreshed."}</p>
+              <p>This saved table includes all four outcome scenarios from that calculation.</p>
+              <button className={styles.textButton} disabled={impactLoading || loading} onClick={() => setImpactRetry(value => value + 1)}>Retry league impact</button>
+            </>}
           </div>}
           {impactLoading && !activeImpact && <div role="status" className={styles.loading}><span className={styles.spinner} aria-hidden="true" />
             <div><strong>Projecting the remaining schedule</strong><p>Comparing this outcome with the baseline points race.</p></div></div>}
@@ -332,12 +339,12 @@ export default function PredictionsPage() {
           {activeImpact && scenario && <>
             <div className={styles.scenarioSummary}><span className={styles.summaryIcon} aria-hidden="true">↗</span><div>
               <span className={styles.controlLabel}>If this result happens</span><h3>{selectedLabel}</h3>
-              <p>{activeImpact.simulations.toLocaleString()} simulations · {activeImpact.remaining_fixtures} remaining fixtures · top {topN} on points</p>
+              <p>{activeImpact.simulations.toLocaleString()} simulations · {activeImpact.remaining_fixtures} {reconstructedStandings ? "fixtures from snapshot" : "remaining fixtures"} · top {topN} on points</p>
             </div></div>
             <div className={styles.tableWrap} tabIndex={0} role="region" aria-label="League points projections, scroll horizontally for all columns">
               <table className={styles.impactTable}>
-                <caption>{showingSnapshot ? "Saved scenario" : "Scenario"}: {selectedLabel}. Baseline order retained for comparison.</caption>
-                <thead><tr><th scope="col">Team</th><th scope="col">{showingSnapshot ? "Points at snapshot" : "Points now"}</th><th scope="col">Baseline points</th><th scope="col">Scenario points</th>
+                <caption>{showingSnapshot ? "Saved scenario" : reconstructedStandings ? "Pre-game snapshot scenario" : "Scenario"}: {selectedLabel}. Baseline order retained for comparison.</caption>
+                <thead><tr><th scope="col">Team</th><th scope="col">{historicalTable ? "Points at snapshot" : "Points now"}</th><th scope="col">Baseline points</th><th scope="col">Scenario points</th>
                   <th scope="col">Change</th><th scope="col">Points rank <span>baseline → scenario</span></th><th scope="col">Top {topN} baseline</th><th scope="col">Top {topN} scenario</th></tr></thead>
                 <tbody>{baseline.map(team => {
                   const projected = scenarioByTeam.get(team.team_id);
@@ -356,7 +363,7 @@ export default function PredictionsPage() {
             </div>
             <p className={styles.tableHint}>Ranks are average positions based on points; a negative rank change is an improvement. Ranges reflect unresolved tied-point ordering, not confidence intervals.</p>
             <p className={styles.scope}>Remaining-match probabilities are held fixed. The sampling margin is at most approximately ±{(activeImpact.max_mc_margin_95 * 100).toFixed(1)} percentage points at 95% for each reported probability; model uncertainty is additional.</p>
-            <p className={styles.updated}>Standings fetched {dateLabel(activeImpact.standings_updated_at)} · This scenario does not predict playoff qualification or a championship.</p>
+            <p className={styles.updated}>{reconstructedStandings ? "Match data" : "Standings"} fetched {dateLabel(activeImpact.standings_updated_at)} · This scenario does not predict playoff qualification or a championship.</p>
             <Notes items={[...(activeImpact.warnings ?? []), ...(activeImpact.limitations ?? [])]} title="Scenario assumptions" />
           </>}
 

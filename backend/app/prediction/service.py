@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -267,6 +267,62 @@ def reconcile_standings(matches: list[Match], standings: list[Standing]) -> None
             raise PredictionUnavailable('Official standings and finished match results do not yet agree. Refresh after the provider updates both datasets.', 409)
 
 
+def _completed_results_snapshot(ctx: PredictionContext) -> tuple[PredictionContext, list[Standing], list[Match], int]:
+    """Reconstruct a pre-day table and replay every known fixture from that day.
+
+    Today's final/live scores are deliberately ignored. Every noncancelled game
+    from the cutoff onward is simulated once, so no points are lost or counted
+    twice. This is a retrospective pre-match view, not a live-state forecast.
+    """
+    cutoff = ctx.now.astimezone(HELSINKI).replace(hour=0, minute=0, second=0, microsecond=0, fold=0).astimezone(timezone.utc)
+    names: dict[str, str] = {}
+    completed, replay, seen = [], [], set()
+    started = 0
+    for match in ctx.current.matches:
+        if match.status == 'cancelled':
+            continue
+        if (match.key in seen or match.season != ctx.season or not match.home_id
+            or not match.away_id or match.home_id == match.away_id):
+            raise PredictionUnavailable('A completed-results snapshot cannot be calculated: the schedule has duplicate matches or unresolved teams.', 409)
+        if match.status in ('live', 'finished') and match.start > ctx.now:
+            raise PredictionUnavailable('A completed-results snapshot cannot be calculated: a future fixture is marked as started or finished.', 409)
+        seen.add(match.key)
+        names.update({match.home_id: match.home_name, match.away_id: match.away_name})
+        if match.start < cutoff:
+            if match.status != 'finished' or match.outcome is None:
+                raise PredictionUnavailable('A completed-results snapshot cannot be calculated: earlier matches have unfinished or incomplete results.', 409)
+            completed.append(match)
+        else:
+            if match.status not in ('upcoming', 'live', 'finished') or match.start <= cutoff:
+                raise PredictionUnavailable('A completed-results snapshot cannot be calculated: a fixture has an unresolved status or cutoff time.', 409)
+            started += int(match.status in ('live', 'finished') or match.start <= ctx.now)
+            replay.append(replace(match, status='upcoming', home_goals=None, away_goals=None,
+                                  home_regulation_goals=None, away_regulation_goals=None,
+                                  finish_type=None, home_expected_goals=None, away_expected_goals=None))
+    totals = {team: {'points': 0, 'played': 0, 'regulation_wins': 0, 'overtime_wins': 0,
+                     'overtime_losses': 0, 'regulation_losses': 0, 'goals_for': 0, 'goals_against': 0}
+              for team in names}
+    home_fields = ('regulation_wins', 'overtime_wins', 'overtime_losses', 'regulation_losses')
+    away_fields = tuple(reversed(home_fields))
+    for match in completed:
+        outcome = match.outcome
+        assert outcome is not None
+        for team, points, field, goals, against in (
+            (match.home_id, OUTCOME_POINTS[outcome][0], home_fields[outcome], match.home_goals, match.away_goals),
+            (match.away_id, OUTCOME_POINTS[outcome][1], away_fields[outcome], match.away_goals, match.home_goals),
+        ):
+            row = totals[team]
+            row['points'] += points
+            row['played'] += 1
+            row[field] += 1
+            row['goals_for'] += goals
+            row['goals_against'] += against
+    standings = [Standing(team, names[team], **totals[team]) for team in sorted(names)]
+    historical = [match for match in ctx.history if match.start < cutoff]
+    snapshot_ctx = replace(ctx, history=historical, now=cutoff)
+    return snapshot_ctx, standings, sorted(replay, key=lambda match: (match.start, match.game_id)), started
+
+
 async def get_impact(game_id: int, *, top_n: int = 4, simulations: int = 4000, expected_model_version: str | None = None) -> ImpactResponse:
     ctx = await context()
     if expected_model_version is not None and expected_model_version != ctx.bundle.metadata['model_version']:
@@ -277,20 +333,38 @@ async def get_impact(game_id: int, *, top_n: int = 4, simulations: int = 4000, e
         raise PredictionUnavailable('The selected match is not an upcoming regular-season fixture.', 404)
     unresolved = [m for m in ctx.current.matches if m.status == 'live' or
                   (m.status == 'upcoming' and (m.start <= ctx.now or not m.home_id or not m.away_id or m.home_id == m.away_id))]
-    if unresolved:
-        raise PredictionUnavailable('League scenarios are paused while matches are live or fixtures have unresolved dates or teams. Upcoming-match forecasts remain available.', 409)
-    try:
-        official = await data.load_standings(ctx.season)
-    except data.PredictionDataError as error:
-        raise PredictionUnavailable(str(error), 502) from error
-    if not 1 <= top_n <= len(official.standings):
+    today = ctx.now.astimezone(HELSINKI).date()
+    snapshot_mode = any(match.day == today and (match.status == 'live' or
+                        (match.status == 'upcoming' and match.start <= ctx.now)) for match in unresolved)
+    started = 0
+    if snapshot_mode:
+        calculation_ctx, standings, fixtures, started = _completed_results_snapshot(ctx)
+        standings_updated_at = ctx.current.fetched_at
+        warnings = [
+            'The table is reconstructed from completed results before the stated Helsinki-day cutoff; it is not the official live standings.',
+            "All of today's noncancelled matches, including live and already-finished matches, are simulated again from their pre-match probabilities. Today's scores and outcomes are ignored.",
+            'Exact tie-breakers, playoff rules, and any points adjustments outside match results are not encoded.',
+        ]
+    else:
+        if unresolved:
+            raise PredictionUnavailable('League scenarios are paused because the schedule has unresolved dates or teams. A completed-results snapshot is unavailable for these fixtures.', 409)
+        try:
+            official = await data.load_standings(ctx.season)
+        except data.PredictionDataError as error:
+            raise PredictionUnavailable(str(error), 502) from error
+        standings = list(official.standings)
+        standings_updated_at = official.fetched_at
+        calculation_ctx = ctx
+        warnings = ['Official points were reconciled with completed results. Exact tie-breakers and playoff rules are not encoded.']
+    if not 1 <= top_n <= len(standings):
         raise PredictionUnavailable('Top-N must be between one and the number of teams.', 422)
-    reconcile_standings(list(ctx.current.matches), list(official.standings))
-    rows = await asyncio.to_thread(_forecast_rows, ctx, fixtures)
+    if not snapshot_mode:
+        reconcile_standings(list(ctx.current.matches), standings)
+    rows = await asyncio.to_thread(_forecast_rows, calculation_ctx, fixtures)
     async with _simulation_lock:
         try:
             result = await asyncio.to_thread(
-                simulate_scenarios, list(official.standings), fixtures,
+                simulate_scenarios, standings, fixtures,
                 [row['probabilities'] for row in rows], selected_match_key=selected.key,
                 simulations=simulations, top_n=top_n, seed=2026,
             )
@@ -298,7 +372,9 @@ async def get_impact(game_id: int, *, top_n: int = 4, simulations: int = 4000, e
             raise PredictionUnavailable(f'League scenario inputs are incomplete: {error}', 409) from error
     return ImpactResponse(
         **result, season=ctx.season, game_id=game_id, generated_at=ctx.now,
-        standings_updated_at=official.fetched_at, model_name=ctx.bundle.metadata['selected_model'],
+        standings_updated_at=standings_updated_at, model_name=ctx.bundle.metadata['selected_model'],
         model_version=ctx.bundle.metadata['model_version'], forecast_cutoff=ctx.now.astimezone(HELSINKI).date().isoformat(),
-        warnings=['Official points were reconciled with completed results. Exact tie-breakers and playoff rules are not encoded.'],
+        standings_basis='completed_results_snapshot' if snapshot_mode else 'official',
+        standings_as_of=calculation_ctx.now if snapshot_mode else None,
+        simulated_started_games=started, warnings=warnings,
     )

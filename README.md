@@ -198,9 +198,17 @@ odds. Official season-specific tie-break/playoff rules are not encoded. Future
 fixture probabilities stay fixed within each simulation. Sampling margins do
 not include model or data uncertainty.
 
-League scenarios require official standings to reconcile with completed results.
-They pause while matches are live, past fixtures remain unresolved, or standings
-and results disagree. Upcoming-match forecasts remain independently available.
+Normally, league scenarios reconcile official standings with completed results.
+While today's matches are live or have started without a final status, the
+backend instead reconstructs a pre-game points table from real completed results
+before Helsinki midnight. It simulates every non-cancelled match from that cutoff
+onward, including today's started/finished matches, using pre-game probabilities
+and ignoring live scores and today's final results. The UI labels this as a
+dated snapshot, not live standings. This works on a first visit and for a new
+match or top-N target, without any previously saved browser table.
+Unresolved older fixtures, unknown teams, unusable historical results, or
+inconsistent official standings outside snapshot mode still block scenarios.
+Upcoming-match forecasts remain independently available.
 Forecast/model versions are checked so a stale browser page cannot mix an old
 forecast with a newly prepared scenario model.
 
@@ -211,8 +219,9 @@ New endpoints:
 - `GET /api/liiga/predictions/{game_id}/impact?top_n=4&simulations=4000`:
   baseline plus all four forced outcomes. Simulations are bounded to 1,000–10,000;
   `top_n` must be valid for the standings. Optional `model_version` rejects stale
-  callers with 409. Live/unreconciled scenarios also return 409; unavailable data
-  returns 502 and insufficient training history 503. No fabricated forecasts.
+  callers with 409. Responses identify `standings_basis`, `standings_as_of` and
+  `simulated_started_games`. Invalid/unreconciled inputs return 409; unavailable
+  data returns 502 and insufficient training history 503. No fabricated results.
 
 ## Step 4 — See how the agent works
 

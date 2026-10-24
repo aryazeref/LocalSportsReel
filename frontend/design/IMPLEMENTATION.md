@@ -61,9 +61,14 @@ and changes "Points now" to "Points at snapshot". All four saved outcomes remain
 selectable. A successful retry replaces it with fresh results.
 
 Snapshots are isolated by API, season, game, both teams, model version, and top-N
-target. No saved table means no fallback; this does not reconstruct an earlier
-calculation or bypass backend live-game checks. Browser data is validated before
-display. Clearing browser storage removes persisted snapshots.
+target. No saved table means no browser fallback. Independently, the backend can
+now reconstruct a pre-game table from real results before Helsinki midnight while
+today's games are underway, so first-time visitors and new matches/targets still
+get calculations. This fresh calculation is labelled a pre-game snapshot, with
+its points cutoff and count of already-started matches being simulated from
+scratch. Live scores and today's final results do not enter those projections.
+Browser data and snapshot metadata are validated before display. Clearing browser
+storage removes persisted snapshots.
 
 Run the focused cache tests with `npm run test:snapshots`. Browser checks cover
 success followed by a live-game pause, pending/failed forecast refresh, reload,

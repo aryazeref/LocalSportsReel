@@ -54,6 +54,14 @@ export function validImpact(value: unknown, context: ImpactContext): value is Im
     || !finite(value.max_mc_margin_95) || value.max_mc_margin_95 < 0 || value.max_mc_margin_95 > 1
     || !Array.isArray(value.baseline) || !value.baseline.length || !Array.isArray(value.scenarios)
     || value.scenarios.length !== 4 || context.topN < 1 || context.topN > value.baseline.length) return false;
+  if (value.standings_basis !== undefined && value.standings_basis !== "official"
+    && value.standings_basis !== "completed_results_snapshot") return false;
+  if (value.standings_as_of != null && !timestamp(value.standings_as_of)) return false;
+  if (value.simulated_started_games !== undefined && (!integer(value.simulated_started_games, 0)
+    || value.simulated_started_games > value.remaining_fixtures)) return false;
+  if (value.standings_basis === "completed_results_snapshot"
+    && (!timestamp(value.standings_as_of) || !integer(value.simulated_started_games, 0)
+      || Date.parse(value.standings_as_of) > Date.parse(value.generated_at))) return false;
   const baseline = value.baseline;
   const scenarios = value.scenarios;
   if (!baseline.every(team => projection(team, baseline.length))) return false;
