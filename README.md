@@ -13,6 +13,7 @@
 - Browser UI with interactive local moment cards and traceable evidence.
 - Automated backend tests, mock data, and interactive API documentation.
 - Real Liiga match cards, season/team filters, goals, goal difference, historical win percentage, and recent form on `/liiga`.
+- Experimental pre-match probabilities, chronological model comparisons, and regular-season points scenarios on `/predictions`.
 
 ## Step 1 — Get your tools ready
 
@@ -62,9 +63,9 @@ NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
 
 ## Try the real Liiga integration
 
-With both servers running, use the shared **Home / Liiga** navigation bar to
+With both servers running, use the shared **Home / Liiga / Predictions** navigation bar to
 switch between the fictional story homepage and real Liiga match centre. The
-current page is highlighted, and both links stay visible on mobile.
+current page is highlighted, and all links stay visible on mobile.
 On `/liiga`, select a season
 and team to see fixtures and statistics calculated by FastAPI. The default is
 the current Helsinki season, identified by its ending year (2027 means 2026–27;
@@ -104,10 +105,10 @@ OS-provided IANA database. If startup reports `No module named 'tzdata'` or
 `No time zone found with key Europe/Helsinki`, install the updated requirements
 in the same virtual environment used to run Uvicorn, then restart the backend.
 
-These are descriptive statistics, **not official standings or win predictions**.
-Points, competition tie-breakers, ML predictions, and “if they win” scenarios
-are not implemented yet. Provider failures appear as errors; real-data routes
-never substitute the fictional demo data or `json_data.json`.
+The `/liiga` statistics are descriptive, not forecasts. The separate `/predictions`
+page provides experimental statistical forecasts and points scenarios described
+below. Provider failures appear as errors; real-data routes never substitute the
+fictional demo data or `json_data.json`.
 
 The implementation is split into:
 
@@ -121,6 +122,74 @@ Run regression tests **from `backend`** with `python -m pytest -q`, and validate
 the frontend from `frontend` with `npm run build`. The root `test_liiga.py` is
 a manual API exploration script that writes `json_data.json`; it is not the
 automated test suite.
+
+## Match predictions and points scenarios
+
+After pulling this feature, update Python dependencies from `backend` before
+restarting the server. No additional frontend dependency or LLM key is needed:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000 --env-file .env
+```
+
+If you do not use a backend `.env`, omit `--env-file .env`. Start the frontend
+as before and select **Predictions** in the navigation bar.
+
+The first visit downloads six ending-seasons of regular-season results and
+prepares the model. Later requests reuse persistent, validated raw snapshots
+and a JSON model in ignored `backend/.prediction-cache/`. The cache can be
+relocated using `PREDICTION_CACHE_DIR` in the backend process environment.
+Historical snapshots refresh after a day; the current season after two minutes.
+The model refreshes when its completed-results fingerprint changes or its
+pipeline version changes. No credentials are required for the public Liiga API.
+
+To prepare explicitly before opening the page, run from `backend`:
+
+```powershell
+.\.venv\Scripts\python.exe -m app.prediction.prepare
+```
+
+Use `--refresh` to refresh snapshots and retrain. This prints model provenance
+and evaluation; JSON artifacts and `evaluation.json` remain in the ignored cache.
+The application also prepares on demand, so this command is optional.
+
+The paper-inspired model compares recent regulation goals scored/conceded and
+form ranks (six/18-feature variants) with historical-prior and Elo baselines.
+Regularized logistic and kNN candidates are selected using earlier chronological
+validation; the most recent prior ending-season is held out for evaluation.
+Production weights are then refitted on all known results from earlier Helsinki
+calendar dates. Same-day results are excluded. Cold-start clubs use a prior,
+and current injuries, starting goalies and xG are not model inputs yet.
+
+**The first measured test did not establish superiority over Elo.** The UI shows
+all tested model families and probability-calibration bins. See
+[the initial evaluation](docs/PREDICTION_EVALUATION.md) for actual scores and
+[the JSON report](docs/prediction-evaluation.json) for provenance.
+
+Forecasts distinguish final home/away wins from four regulation/extra-time
+outcomes. Select a match and an outcome to compare baseline versus forced-result
+points projections for every club. Top-N targets are **points-finish bounds**:
+ties remain unresolved, so these are not exact qualification or championship
+odds. Official season-specific tie-break/playoff rules are not encoded. Future
+fixture probabilities stay fixed within each simulation. Sampling margins do
+not include model or data uncertainty.
+
+League scenarios require official standings to reconcile with completed results.
+They pause while matches are live, past fixtures remain unresolved, or standings
+and results disagree. Upcoming-match forecasts remain independently available.
+Forecast/model versions are checked so a stale browser page cannot mix an old
+forecast with a newly prepared scenario model.
+
+New endpoints:
+
+- `GET /api/liiga/predictions?limit=12`: current-season upcoming forecasts,
+  evidence and historical model comparisons; optional `team_id`, limit 1–30.
+- `GET /api/liiga/predictions/{game_id}/impact?top_n=4&simulations=4000`:
+  baseline plus all four forced outcomes. Simulations are bounded to 1,000–10,000;
+  `top_n` must be valid for the standings. Optional `model_version` rejects stale
+  callers with 409. Live/unreconciled scenarios also return 409; unavailable data
+  returns 502 and insufficient training history 503. No fabricated forecasts.
 
 ## Step 4 — See how the agent works
 
@@ -191,7 +260,7 @@ Read [docs/ROADMAP.md](docs/ROADMAP.md) for an incremental plan covering officia
 For the prediction feature, [docs/PREDICTION_DATA.md](docs/PREDICTION_DATA.md)
 inventories the available Liiga inputs, live verification, data-quality limits,
 competition rules still needed, and the proposed modelling sequence. It includes
-endpoint and field appendices; the prediction model itself is not implemented yet.
+endpoint and field appendices; richer player/xG inputs remain future extensions.
 The [paper review](docs/PREDICTION_PAPER_REVIEW.md) maps Berrar, Lopes and
 Dubitzky's 2024 soccer framework to a proposed Liiga feature set, evaluation
 design and competition-impact extension.

@@ -1,0 +1,862 @@
+{
+  "model_metadata": {
+    "model_version": "liiga-paper-v1-bfeb6464ad57",
+    "dataset_sha256": "054ecf5317c7ec7386ac67271e34c09d938f8c68c971c6baa39fbcd79fb63d52",
+    "created_at": "2026-10-24T12:35:44.781518+00:00",
+    "training_cutoff": "2026-10-23T16:30:00+00:00",
+    "history_start": "2021-09-09T15:30:00+00:00",
+    "training_seasons": [
+      2022,
+      2023,
+      2024,
+      2025,
+      2026,
+      2027
+    ],
+    "usable_matches": 2439,
+    "excluded_matches": 0,
+    "training_rows": 2378,
+    "outcomes": [
+      "home_regulation",
+      "home_overtime",
+      "away_overtime",
+      "away_regulation"
+    ],
+    "algorithm": "logistic",
+    "selected_model": "logistic_total_n40",
+    "feature_set": "total",
+    "window": 40,
+    "k": null,
+    "status": "experimental",
+    "production_refit": "All supplied usable known results; distinct from the earlier held-out evaluation fit",
+    "cutoff_policy": "Only results from strictly earlier Helsinki calendar dates; same-day results excluded",
+    "rank_definition": "Recent points-per-game form table among clubs known in the season; midranks for statistical ties; not official standings",
+    "cold_start_policy": "Fewer than six prior results for either club uses the historical league-prior distribution",
+    "service_fingerprint": "8ecd3f7882bc53e0d0e07a08d7c2f718e4e5cc8cf78169b34fa549694e3f8974",
+    "pipeline_version": 1,
+    "dataset_manifest": [
+      {
+        "season": 2022,
+        "sha256": "987f7e453b08bf216290bb619702053c9b4bf05744a4dfcc29a67ca099a4449d",
+        "fetched_at": "2026-10-24T12:31:03.217846+00:00",
+        "matches": 448,
+        "diagnostics": {
+          "total_records": 448,
+          "usable_finished": 448,
+          "unusable_finished": 0,
+          "finished_records": 448,
+          "upcoming_records": 0,
+          "live_records": 0,
+          "cancelled_records": 0,
+          "unresolved_team_records": 0,
+          "duplicate_team_records": 0,
+          "regulation_score_fallbacks": 0
+        }
+      },
+      {
+        "season": 2023,
+        "sha256": "46381050aee10a1c196f7925b5cadf021c352239855396a6022d12fb4a00a5b8",
+        "fetched_at": "2026-10-24T12:31:04.470530+00:00",
+        "matches": 450,
+        "diagnostics": {
+          "total_records": 450,
+          "usable_finished": 450,
+          "unusable_finished": 0,
+          "finished_records": 450,
+          "upcoming_records": 0,
+          "live_records": 0,
+          "cancelled_records": 0,
+          "unresolved_team_records": 0,
+          "duplicate_team_records": 0,
+          "regulation_score_fallbacks": 0
+        }
+      },
+      {
+        "season": 2024,
+        "sha256": "2365927ee288c50990337191c03acbf1b17af302cce043709126209c0d1bac64",
+        "fetched_at": "2026-10-24T12:31:04.264864+00:00",
+        "matches": 450,
+        "diagnostics": {
+          "total_records": 450,
+          "usable_finished": 450,
+          "unusable_finished": 0,
+          "finished_records": 450,
+          "upcoming_records": 0,
+          "live_records": 0,
+          "cancelled_records": 0,
+          "unresolved_team_records": 0,
+          "duplicate_team_records": 0,
+          "regulation_score_fallbacks": 0
+        }
+      },
+      {
+        "season": 2025,
+        "sha256": "799543958177ac949ecb13bfea452678d8b50a61858e18c514867540be3e8835",
+        "fetched_at": "2026-10-24T12:31:05.134946+00:00",
+        "matches": 480,
+        "diagnostics": {
+          "total_records": 480,
+          "usable_finished": 480,
+          "unusable_finished": 0,
+          "finished_records": 480,
+          "upcoming_records": 0,
+          "live_records": 0,
+          "cancelled_records": 0,
+          "unresolved_team_records": 0,
+          "duplicate_team_records": 0,
+          "regulation_score_fallbacks": 0
+        }
+      },
+      {
+        "season": 2026,
+        "sha256": "ab1ad006af6b4e4a40c3036ccb26145713f8fb8e1658534491624e2aca3b9344",
+        "fetched_at": "2026-10-24T12:31:04.841927+00:00",
+        "matches": 480,
+        "diagnostics": {
+          "total_records": 480,
+          "usable_finished": 480,
+          "unusable_finished": 0,
+          "finished_records": 480,
+          "upcoming_records": 0,
+          "live_records": 0,
+          "cancelled_records": 0,
+          "unresolved_team_records": 0,
+          "duplicate_team_records": 0,
+          "regulation_score_fallbacks": 0
+        }
+      },
+      {
+        "season": 2027,
+        "sha256": "964229413dc80546d4efb7d4daeb145d4ed41977839310812d7cbaa5bead297c",
+        "fetched_at": "2026-10-24T12:34:44.474681+00:00",
+        "matches": 544,
+        "diagnostics": {
+          "total_records": 544,
+          "usable_finished": 131,
+          "unusable_finished": 0,
+          "finished_records": 131,
+          "upcoming_records": 413,
+          "live_records": 0,
+          "cancelled_records": 0,
+          "unresolved_team_records": 0,
+          "duplicate_team_records": 0,
+          "regulation_score_fallbacks": 0
+        }
+      }
+    ]
+  },
+  "evaluation": {
+    "selected_model": "logistic_total_n40",
+    "selection_metric": "chronological validation four-outcome log loss",
+    "feature_set": "total",
+    "window": 40,
+    "k": null,
+    "validation": {
+      "start": "2023-09-21",
+      "end": "2025-03-15",
+      "count": 904,
+      "cold_start_matches": 6,
+      "folds": 3,
+      "candidates": [
+        {
+          "name": "logistic_total_n40",
+          "algorithm": "logistic",
+          "window": 40,
+          "feature_set": "total",
+          "C": 0.5,
+          "count": 904,
+          "log_loss": 1.2230681401411676,
+          "brier": 0.6642993120529523,
+          "final_winner_accuracy": 0.5873893805309734,
+          "outcome_accuracy": 0.46017699115044247,
+          "regulation_rps": 0.2269757537264288,
+          "expected_calibration_error": 0.02423432261195448
+        },
+        {
+          "name": "logistic_total_n24",
+          "algorithm": "logistic",
+          "window": 24,
+          "feature_set": "total",
+          "C": 0.5,
+          "count": 904,
+          "log_loss": 1.2236945315121202,
+          "brier": 0.6646715939201077,
+          "final_winner_accuracy": 0.5829646017699115,
+          "outcome_accuracy": 0.47123893805309736,
+          "regulation_rps": 0.22704464570206212,
+          "expected_calibration_error": 0.03127711678181076
+        },
+        {
+          "name": "logistic_total_n12",
+          "algorithm": "logistic",
+          "window": 12,
+          "feature_set": "total",
+          "C": 0.5,
+          "count": 904,
+          "log_loss": 1.2239904657529843,
+          "brier": 0.6668012852502575,
+          "final_winner_accuracy": 0.577433628318584,
+          "outcome_accuracy": 0.4579646017699115,
+          "regulation_rps": 0.2286135350801172,
+          "expected_calibration_error": 0.025338913457354485
+        },
+        {
+          "name": "elo",
+          "algorithm": "elo",
+          "window": 12,
+          "feature_set": "total",
+          "count": 904,
+          "log_loss": 1.2265802895404292,
+          "brier": 0.6644868262644763,
+          "final_winner_accuracy": 0.5807522123893806,
+          "outcome_accuracy": 0.46017699115044247,
+          "regulation_rps": 0.22671690177854795,
+          "expected_calibration_error": 0.03310584629994884
+        },
+        {
+          "name": "logistic_total_n6",
+          "algorithm": "logistic",
+          "window": 6,
+          "feature_set": "total",
+          "C": 0.5,
+          "count": 904,
+          "log_loss": 1.23052600033173,
+          "brier": 0.6690341620699535,
+          "final_winner_accuracy": 0.5730088495575221,
+          "outcome_accuracy": 0.459070796460177,
+          "regulation_rps": 0.22922695143354396,
+          "expected_calibration_error": 0.008732002272098362
+        },
+        {
+          "name": "paper_knn_total_n24_k75",
+          "algorithm": "knn",
+          "window": 24,
+          "feature_set": "total",
+          "k": 75,
+          "count": 904,
+          "log_loss": 1.2345835128608262,
+          "brier": 0.6666769379329742,
+          "final_winner_accuracy": 0.5707964601769911,
+          "outcome_accuracy": 0.4668141592920354,
+          "regulation_rps": 0.22729000990678047,
+          "expected_calibration_error": 0.05190305593980225
+        },
+        {
+          "name": "logistic_homeaway_n24",
+          "algorithm": "logistic",
+          "window": 24,
+          "feature_set": "homeaway",
+          "C": 0.5,
+          "count": 904,
+          "log_loss": 1.23492960753286,
+          "brier": 0.6703638137259056,
+          "final_winner_accuracy": 0.5674778761061947,
+          "outcome_accuracy": 0.4657079646017699,
+          "regulation_rps": 0.2292904879283764,
+          "expected_calibration_error": 0.0415732228166597
+        },
+        {
+          "name": "league_prior",
+          "algorithm": "prior",
+          "window": 12,
+          "feature_set": "total",
+          "count": 904,
+          "log_loss": 1.2354970474024884,
+          "brier": 0.6763718532157186,
+          "final_winner_accuracy": 0.5464601769911505,
+          "outcome_accuracy": 0.4314159292035398,
+          "regulation_rps": 0.2337080595645258,
+          "expected_calibration_error": 0.0031678489478257355
+        },
+        {
+          "name": "paper_knn_homeaway_n24_k75",
+          "algorithm": "knn",
+          "window": 24,
+          "feature_set": "homeaway",
+          "k": 75,
+          "count": 904,
+          "log_loss": 1.2361545697488276,
+          "brier": 0.6689233772323755,
+          "final_winner_accuracy": 0.5597345132743363,
+          "outcome_accuracy": 0.4469026548672566,
+          "regulation_rps": 0.22866258369092754,
+          "expected_calibration_error": 0.024385338495694017
+        },
+        {
+          "name": "paper_knn_homeaway_n12_k75",
+          "algorithm": "knn",
+          "window": 12,
+          "feature_set": "homeaway",
+          "k": 75,
+          "count": 904,
+          "log_loss": 1.2365842908664866,
+          "brier": 0.6720857741721451,
+          "final_winner_accuracy": 0.5752212389380531,
+          "outcome_accuracy": 0.45353982300884954,
+          "regulation_rps": 0.2306332020160304,
+          "expected_calibration_error": 0.01517083018365803
+        },
+        {
+          "name": "logistic_homeaway_n12",
+          "algorithm": "logistic",
+          "window": 12,
+          "feature_set": "homeaway",
+          "C": 0.5,
+          "count": 904,
+          "log_loss": 1.236690972110692,
+          "brier": 0.6721413420973363,
+          "final_winner_accuracy": 0.577433628318584,
+          "outcome_accuracy": 0.461283185840708,
+          "regulation_rps": 0.2303752595185938,
+          "expected_calibration_error": 0.02296690929026831
+        },
+        {
+          "name": "paper_knn_total_n12_k75",
+          "algorithm": "knn",
+          "window": 12,
+          "feature_set": "total",
+          "k": 75,
+          "count": 904,
+          "log_loss": 1.2381258037970237,
+          "brier": 0.6746736591337245,
+          "final_winner_accuracy": 0.5873893805309734,
+          "outcome_accuracy": 0.46017699115044247,
+          "regulation_rps": 0.23207629312931888,
+          "expected_calibration_error": 0.043843291651700735
+        },
+        {
+          "name": "paper_knn_homeaway_n40_k75",
+          "algorithm": "knn",
+          "window": 40,
+          "feature_set": "homeaway",
+          "k": 75,
+          "count": 904,
+          "log_loss": 1.2381840405637181,
+          "brier": 0.6725796341934978,
+          "final_winner_accuracy": 0.5519911504424779,
+          "outcome_accuracy": 0.4446902654867257,
+          "regulation_rps": 0.2305018768135113,
+          "expected_calibration_error": 0.037866314148322935
+        },
+        {
+          "name": "logistic_homeaway_n40",
+          "algorithm": "logistic",
+          "window": 40,
+          "feature_set": "homeaway",
+          "C": 0.5,
+          "count": 904,
+          "log_loss": 1.2382863719625181,
+          "brier": 0.6720891506440221,
+          "final_winner_accuracy": 0.5719026548672567,
+          "outcome_accuracy": 0.4502212389380531,
+          "regulation_rps": 0.22994047312263918,
+          "expected_calibration_error": 0.0340892151894022
+        },
+        {
+          "name": "paper_knn_total_n6_k75",
+          "algorithm": "knn",
+          "window": 6,
+          "feature_set": "total",
+          "k": 75,
+          "count": 904,
+          "log_loss": 1.240432089429296,
+          "brier": 0.6794515544059297,
+          "final_winner_accuracy": 0.5486725663716814,
+          "outcome_accuracy": 0.4225663716814159,
+          "regulation_rps": 0.23515047893302807,
+          "expected_calibration_error": 0.029947051727735978
+        },
+        {
+          "name": "paper_knn_total_n40_k75",
+          "algorithm": "knn",
+          "window": 40,
+          "feature_set": "total",
+          "k": 75,
+          "count": 904,
+          "log_loss": 1.2408013254325594,
+          "brier": 0.6720431032856371,
+          "final_winner_accuracy": 0.5851769911504425,
+          "outcome_accuracy": 0.4524336283185841,
+          "regulation_rps": 0.22973096756266329,
+          "expected_calibration_error": 0.03861065483072826
+        },
+        {
+          "name": "logistic_homeaway_n6",
+          "algorithm": "logistic",
+          "window": 6,
+          "feature_set": "homeaway",
+          "C": 0.5,
+          "count": 904,
+          "log_loss": 1.2434870198300023,
+          "brier": 0.6743285875470084,
+          "final_winner_accuracy": 0.5608407079646017,
+          "outcome_accuracy": 0.4557522123893805,
+          "regulation_rps": 0.23082621243735488,
+          "expected_calibration_error": 0.017329930395140566
+        },
+        {
+          "name": "paper_knn_homeaway_n6_k75",
+          "algorithm": "knn",
+          "window": 6,
+          "feature_set": "homeaway",
+          "k": 75,
+          "count": 904,
+          "log_loss": 1.2439974803743792,
+          "brier": 0.6795489998282195,
+          "final_winner_accuracy": 0.5619469026548672,
+          "outcome_accuracy": 0.43694690265486724,
+          "regulation_rps": 0.2346300913281667,
+          "expected_calibration_error": 0.0384719226012359
+        },
+        {
+          "name": "paper_knn_homeaway_n12_k35",
+          "algorithm": "knn",
+          "window": 12,
+          "feature_set": "homeaway",
+          "k": 35,
+          "count": 904,
+          "log_loss": 1.2488605837968616,
+          "brier": 0.6764534646989826,
+          "final_winner_accuracy": 0.5674778761061947,
+          "outcome_accuracy": 0.4491150442477876,
+          "regulation_rps": 0.23221397484630113,
+          "expected_calibration_error": 0.03495727531324089
+        },
+        {
+          "name": "paper_knn_total_n12_k35",
+          "algorithm": "knn",
+          "window": 12,
+          "feature_set": "total",
+          "k": 35,
+          "count": 904,
+          "log_loss": 1.2568719307688658,
+          "brier": 0.6819393903637698,
+          "final_winner_accuracy": 0.5674778761061947,
+          "outcome_accuracy": 0.44579646017699115,
+          "regulation_rps": 0.2348009127955553,
+          "expected_calibration_error": 0.05655885616548311
+        },
+        {
+          "name": "paper_knn_homeaway_n24_k35",
+          "algorithm": "knn",
+          "window": 24,
+          "feature_set": "homeaway",
+          "k": 35,
+          "count": 904,
+          "log_loss": 1.2574981234274165,
+          "brier": 0.6734471565353312,
+          "final_winner_accuracy": 0.5630530973451328,
+          "outcome_accuracy": 0.4557522123893805,
+          "regulation_rps": 0.2294344412075425,
+          "expected_calibration_error": 0.06599202747376798
+        },
+        {
+          "name": "paper_knn_total_n6_k35",
+          "algorithm": "knn",
+          "window": 6,
+          "feature_set": "total",
+          "k": 35,
+          "count": 904,
+          "log_loss": 1.2581361572321745,
+          "brier": 0.6852487899889275,
+          "final_winner_accuracy": 0.543141592920354,
+          "outcome_accuracy": 0.4258849557522124,
+          "regulation_rps": 0.2373024771396146,
+          "expected_calibration_error": 0.042802282727042826
+        },
+        {
+          "name": "paper_knn_total_n40_k35",
+          "algorithm": "knn",
+          "window": 40,
+          "feature_set": "total",
+          "k": 35,
+          "count": 904,
+          "log_loss": 1.2592159639056373,
+          "brier": 0.6779456270908417,
+          "final_winner_accuracy": 0.5542035398230089,
+          "outcome_accuracy": 0.44579646017699115,
+          "regulation_rps": 0.23224007762866375,
+          "expected_calibration_error": 0.04421440581306143
+        },
+        {
+          "name": "paper_knn_total_n24_k35",
+          "algorithm": "knn",
+          "window": 24,
+          "feature_set": "total",
+          "k": 35,
+          "count": 904,
+          "log_loss": 1.2611856013622844,
+          "brier": 0.6727520971194572,
+          "final_winner_accuracy": 0.584070796460177,
+          "outcome_accuracy": 0.4756637168141593,
+          "regulation_rps": 0.2289273106266693,
+          "expected_calibration_error": 0.05633147060881247
+        },
+        {
+          "name": "paper_knn_homeaway_n40_k35",
+          "algorithm": "knn",
+          "window": 40,
+          "feature_set": "homeaway",
+          "k": 35,
+          "count": 904,
+          "log_loss": 1.2616482121827257,
+          "brier": 0.6811006909426891,
+          "final_winner_accuracy": 0.5597345132743363,
+          "outcome_accuracy": 0.4491150442477876,
+          "regulation_rps": 0.23348106014238607,
+          "expected_calibration_error": 0.05354292859681479
+        },
+        {
+          "name": "paper_knn_homeaway_n6_k35",
+          "algorithm": "knn",
+          "window": 6,
+          "feature_set": "homeaway",
+          "k": 35,
+          "count": 904,
+          "log_loss": 1.2753378244606266,
+          "brier": 0.692908476646958,
+          "final_winner_accuracy": 0.5298672566371682,
+          "outcome_accuracy": 0.42035398230088494,
+          "regulation_rps": 0.23960798545962583,
+          "expected_calibration_error": 0.06767444699921812
+        },
+        {
+          "name": "paper_knn_homeaway_n24_k15",
+          "algorithm": "knn",
+          "window": 24,
+          "feature_set": "homeaway",
+          "k": 15,
+          "count": 904,
+          "log_loss": 1.2946307476525651,
+          "brier": 0.6892973441952895,
+          "final_winner_accuracy": 0.5376106194690266,
+          "outcome_accuracy": 0.4280973451327434,
+          "regulation_rps": 0.23586441475244568,
+          "expected_calibration_error": 0.04761468214450808
+        },
+        {
+          "name": "paper_knn_homeaway_n12_k15",
+          "algorithm": "knn",
+          "window": 12,
+          "feature_set": "homeaway",
+          "k": 15,
+          "count": 904,
+          "log_loss": 1.3023408619813086,
+          "brier": 0.6925460877483091,
+          "final_winner_accuracy": 0.5508849557522124,
+          "outcome_accuracy": 0.4358407079646018,
+          "regulation_rps": 0.23719947903999491,
+          "expected_calibration_error": 0.05551174500506936
+        },
+        {
+          "name": "paper_knn_homeaway_n40_k15",
+          "algorithm": "knn",
+          "window": 40,
+          "feature_set": "homeaway",
+          "k": 15,
+          "count": 904,
+          "log_loss": 1.3082119163751562,
+          "brier": 0.6911411947101717,
+          "final_winner_accuracy": 0.5530973451327433,
+          "outcome_accuracy": 0.4469026548672566,
+          "regulation_rps": 0.23596483842880003,
+          "expected_calibration_error": 0.05435704894230577
+        },
+        {
+          "name": "paper_knn_total_n12_k15",
+          "algorithm": "knn",
+          "window": 12,
+          "feature_set": "total",
+          "k": 15,
+          "count": 904,
+          "log_loss": 1.3102441887359126,
+          "brier": 0.695341719257225,
+          "final_winner_accuracy": 0.5619469026548672,
+          "outcome_accuracy": 0.4446902654867257,
+          "regulation_rps": 0.2386186405543945,
+          "expected_calibration_error": 0.051709729136094236
+        },
+        {
+          "name": "paper_knn_total_n24_k15",
+          "algorithm": "knn",
+          "window": 24,
+          "feature_set": "total",
+          "k": 15,
+          "count": 904,
+          "log_loss": 1.3118657655392143,
+          "brier": 0.6894026491711954,
+          "final_winner_accuracy": 0.5586283185840708,
+          "outcome_accuracy": 0.46238938053097345,
+          "regulation_rps": 0.2344082169618791,
+          "expected_calibration_error": 0.06575710799023235
+        },
+        {
+          "name": "paper_knn_total_n40_k15",
+          "algorithm": "knn",
+          "window": 40,
+          "feature_set": "total",
+          "k": 15,
+          "count": 904,
+          "log_loss": 1.3166010142780875,
+          "brier": 0.6919791663271188,
+          "final_winner_accuracy": 0.5663716814159292,
+          "outcome_accuracy": 0.46238938053097345,
+          "regulation_rps": 0.23524442251950584,
+          "expected_calibration_error": 0.051167721077458234
+        },
+        {
+          "name": "paper_knn_total_n6_k15",
+          "algorithm": "knn",
+          "window": 6,
+          "feature_set": "total",
+          "k": 15,
+          "count": 904,
+          "log_loss": 1.3167027675416059,
+          "brier": 0.7079103764840475,
+          "final_winner_accuracy": 0.504424778761062,
+          "outcome_accuracy": 0.4026548672566372,
+          "regulation_rps": 0.2461520876695931,
+          "expected_calibration_error": 0.10246643496399153
+        },
+        {
+          "name": "paper_knn_homeaway_n6_k15",
+          "algorithm": "knn",
+          "window": 6,
+          "feature_set": "homeaway",
+          "k": 15,
+          "count": 904,
+          "log_loss": 1.317595318582572,
+          "brier": 0.7060885296494903,
+          "final_winner_accuracy": 0.5309734513274337,
+          "outcome_accuracy": 0.413716814159292,
+          "regulation_rps": 0.24443215421556677,
+          "expected_calibration_error": 0.07701477587339553
+        }
+      ]
+    },
+    "test": {
+      "start": "2025-09-09",
+      "end": "2026-03-17",
+      "count": 480,
+      "cold_start_matches": 0,
+      "season": 2026,
+      "metrics": [
+        {
+          "name": "league_prior",
+          "algorithm": "prior",
+          "window": 12,
+          "feature_set": "total",
+          "count": 480,
+          "log_loss": 1.2070697442033917,
+          "brier": 0.6624066970331977,
+          "final_winner_accuracy": 0.5604166666666667,
+          "outcome_accuracy": 0.45625,
+          "regulation_rps": 0.2344905840894296,
+          "calibration_bins": [
+            {
+              "lower": 0.0,
+              "upper": 0.2,
+              "count": 0,
+              "predicted": null,
+              "observed": null
+            },
+            {
+              "lower": 0.2,
+              "upper": 0.4,
+              "count": 0,
+              "predicted": null,
+              "observed": null
+            },
+            {
+              "lower": 0.4,
+              "upper": 0.6,
+              "count": 480,
+              "predicted": 0.5511083927024011,
+              "observed": 0.5604166666666667
+            },
+            {
+              "lower": 0.6,
+              "upper": 0.8,
+              "count": 0,
+              "predicted": null,
+              "observed": null
+            },
+            {
+              "lower": 0.8,
+              "upper": 1.0,
+              "count": 0,
+              "predicted": null,
+              "observed": null
+            }
+          ],
+          "expected_calibration_error": 0.00930827396426559,
+          "selected": false
+        },
+        {
+          "name": "elo",
+          "algorithm": "elo",
+          "window": 12,
+          "feature_set": "total",
+          "count": 480,
+          "log_loss": 1.1705758538125806,
+          "brier": 0.6348934755586526,
+          "final_winner_accuracy": 0.6354166666666666,
+          "outcome_accuracy": 0.5125,
+          "regulation_rps": 0.22049636118721194,
+          "calibration_bins": [
+            {
+              "lower": 0.0,
+              "upper": 0.2,
+              "count": 1,
+              "predicted": 0.19149915838483594,
+              "observed": 0.0
+            },
+            {
+              "lower": 0.2,
+              "upper": 0.4,
+              "count": 42,
+              "predicted": 0.3470921381274253,
+              "observed": 0.2857142857142857
+            },
+            {
+              "lower": 0.4,
+              "upper": 0.6,
+              "count": 214,
+              "predicted": 0.510617455029058,
+              "observed": 0.5
+            },
+            {
+              "lower": 0.6,
+              "upper": 0.8,
+              "count": 210,
+              "predicted": 0.6797298793509962,
+              "observed": 0.6571428571428571
+            },
+            {
+              "lower": 0.8,
+              "upper": 1.0,
+              "count": 13,
+              "predicted": 0.8195216385889506,
+              "observed": 0.9230769230769231
+            }
+          ],
+          "expected_calibration_error": 0.023189578537516548,
+          "selected": false
+        },
+        {
+          "name": "paper_knn_total_n24_k75",
+          "algorithm": "knn",
+          "window": 24,
+          "feature_set": "total",
+          "k": 75,
+          "count": 480,
+          "log_loss": 1.2113832393759134,
+          "brier": 0.6589868128642216,
+          "final_winner_accuracy": 0.5979166666666667,
+          "outcome_accuracy": 0.47708333333333336,
+          "regulation_rps": 0.2314549742883057,
+          "calibration_bins": [
+            {
+              "lower": 0.0,
+              "upper": 0.2,
+              "count": 0,
+              "predicted": null,
+              "observed": null
+            },
+            {
+              "lower": 0.2,
+              "upper": 0.4,
+              "count": 42,
+              "predicted": 0.3517273301661948,
+              "observed": 0.42857142857142855
+            },
+            {
+              "lower": 0.4,
+              "upper": 0.6,
+              "count": 310,
+              "predicted": 0.5296606871318098,
+              "observed": 0.5774193548387097
+            },
+            {
+              "lower": 0.6,
+              "upper": 0.8,
+              "count": 128,
+              "predicted": 0.6432366021442169,
+              "observed": 0.5625
+            },
+            {
+              "lower": 0.8,
+              "upper": 1.0,
+              "count": 0,
+              "predicted": null,
+              "observed": null
+            }
+          ],
+          "expected_calibration_error": 0.05909775874295527,
+          "selected": false
+        },
+        {
+          "name": "logistic_total_n40",
+          "algorithm": "logistic",
+          "window": 40,
+          "feature_set": "total",
+          "C": 0.5,
+          "count": 480,
+          "log_loss": 1.1820647518271405,
+          "brier": 0.6450936186077116,
+          "final_winner_accuracy": 0.6125,
+          "outcome_accuracy": 0.48541666666666666,
+          "regulation_rps": 0.22637965338587762,
+          "calibration_bins": [
+            {
+              "lower": 0.0,
+              "upper": 0.2,
+              "count": 0,
+              "predicted": null,
+              "observed": null
+            },
+            {
+              "lower": 0.2,
+              "upper": 0.4,
+              "count": 37,
+              "predicted": 0.3641561807846051,
+              "observed": 0.3783783783783784
+            },
+            {
+              "lower": 0.4,
+              "upper": 0.6,
+              "count": 304,
+              "predicted": 0.5145056652386731,
+              "observed": 0.5230263157894737
+            },
+            {
+              "lower": 0.6,
+              "upper": 0.8,
+              "count": 139,
+              "predicted": 0.6546215328616233,
+              "observed": 0.6906474820143885
+            },
+            {
+              "lower": 0.8,
+              "upper": 1.0,
+              "count": 0,
+              "predicted": null,
+              "observed": null
+            }
+          ],
+          "expected_calibration_error": 0.0169252208555153,
+          "selected": true
+        }
+      ],
+      "used_for_selection": false,
+      "training_end": "2025-03-15"
+    },
+    "limitations": [
+      "Experimental probabilities; historical performance is not a guarantee of future accuracy.",
+      "Current roster, injury and announced-goalie information are not inputs to this first model.",
+      "History is carried across seasons; changing squads, schedule formats and new clubs affect reliability.",
+      "Smoothing and calibration diagnostics are provided; no claim of perfect probability calibration is made.",
+      "The production model is refitted on later known results after the held-out evaluation; its in-sample fit is not a new test score."
+    ]
+  }
+}

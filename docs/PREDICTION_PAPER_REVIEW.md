@@ -3,6 +3,10 @@
 Reviewed: 2026-10-24. Status: research and implementation specification, not an
 implemented, trained, or validated hockey prediction model.
 
+Implementation update: the first experimental version is now implemented;
+see [its measured evaluation](PREDICTION_EVALUATION.md). The review below records
+the research rationale and distinguishes the paper from our hockey adaptations.
+
 ## Reference and scope
 
 Daniel Berrar, Philippe Lopes, and Werner Dubitzky (2024), **A data- and

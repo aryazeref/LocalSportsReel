@@ -2,6 +2,10 @@
 
 Audit date: 2026-10-24. This is an input-data audit, not an implemented prediction model.
 
+Implementation update: a first statistical prediction and points-scenario
+prototype now uses the basic historical results. See [the measured evaluation](PREDICTION_EVALUATION.md).
+The richer inputs below are not all features of that initial model.
+
 ## Sources and verification levels
 
 Base URL: `https://prod.liiga-backend.liiga.fi/stats`.

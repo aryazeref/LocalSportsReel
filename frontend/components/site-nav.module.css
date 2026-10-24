@@ -86,10 +86,12 @@
 }
 
 @media (max-width: 680px) {
-  .inner { min-height: 70px; padding: 0 19px; gap: 12px; }
+  .inner { min-height: 70px; padding: 12px 19px; gap: 8px; flex-wrap: wrap; }
+  .inner > nav { width: 100%; }
   .brand { gap: 8px; font-size: 18px; letter-spacing: -.9px; }
   .brandMark { width: 28px; height: 28px; border-radius: 7px; }
   .brandMark svg { width: 20px; height: 20px; }
   .links { gap: 4px; }
-  .link { padding: 9px 10px; font-size: 12px; }
+  .links li { flex: 1; }
+  .link { width: 100%; padding: 9px 10px; font-size: 12px; }
 }

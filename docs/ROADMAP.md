@@ -39,10 +39,12 @@
 - Show one user journey: location → standout moment → evidence → follow player
 - Add a simple 'Would you subscribe?' user-research flow; measure intent
 
-## Optional later: prediction agent
-- Elo/Poisson match model, Monte Carlo standings forecasts
-- Backtesting and calibration; source-driven model inputs
-- What-if playoff scenarios, never presented as certainties
+## Prediction prototype: initial version implemented
+- Paper-inspired six/18-feature kNN and regularized logistic candidates, with league-prior/Elo benchmarks
+- Chronological validation and held-out evaluation; see [actual results](PREDICTION_EVALUATION.md)
+- Upcoming-match probabilities and regular-season points scenarios on `/predictions`
+- Points-only rank/top-N bounds; exact official tie-break and playoff rules remain future work
+- Next: evaluate xG, rest, special teams and announced-goalie inputs, improve calibration, and verify rules before qualification/title simulations
 
 ## Success metrics for the hackathon pitch
 - Users understand a nearby sports moment with minimal context

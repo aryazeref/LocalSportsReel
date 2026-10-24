@@ -7,6 +7,7 @@ import styles from "./site-nav.module.css";
 const links = [
   { href: "/", label: "Home" },
   { href: "/liiga", label: "Liiga" },
+  { href: "/predictions", label: "Predictions" },
 ];
 
 export default function SiteNav() {
