@@ -164,21 +164,28 @@ export default function CompanionPage() {
 
   // Only non-secret, optional preferences belong in browser storage.
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(PROFILE_KEY);
-      if (raw && raw.length < 2000) {
-        const parsed: unknown = JSON.parse(raw);
-        if (parsed && typeof parsed === "object") {
-          const p = parsed as Record<string, unknown>;
-          if (typeof p.userName === "string") setUserName(p.userName.slice(0, 40));
-          if (["short", "normal", "long"].includes(String(p.answerLength)))
-            setAnswerLength(p.answerLength as "short" | "normal" | "long");
-          if (typeof p.fanSince === "string") setFanSince(p.fanSince.slice(0, 4));
-          if (typeof p.favouritePlayer === "string") setFavouritePlayer(p.favouritePlayer.slice(0, 80));
+    let active = true;
+    // Defer reading persisted browser state, avoiding React effect cascades
+    // and keeping the server-rendered HTML identical on first hydration.
+    queueMicrotask(() => {
+      if (!active) return;
+      try {
+        const raw = localStorage.getItem(PROFILE_KEY);
+        if (raw && raw.length < 2000) {
+          const parsed: unknown = JSON.parse(raw);
+          if (parsed && typeof parsed === "object") {
+            const p = parsed as Record<string, unknown>;
+            if (typeof p.userName === "string") setUserName(p.userName.slice(0, 40));
+            if (["short", "normal", "long"].includes(String(p.answerLength)))
+              setAnswerLength(p.answerLength as "short" | "normal" | "long");
+            if (typeof p.fanSince === "string") setFanSince(p.fanSince.slice(0, 4));
+            if (typeof p.favouritePlayer === "string") setFavouritePlayer(p.favouritePlayer.slice(0, 80));
+          }
         }
-      }
-    } catch { /* Local storage is optional and untrusted. */ }
-    setProfileLoaded(true);
+      } catch { /* Local storage is optional and untrusted. */ }
+      setProfileLoaded(true);
+    });
+    return () => { active = false; };
   }, []);
 
   useEffect(() => {
@@ -191,7 +198,10 @@ export default function CompanionPage() {
   }, [profileLoaded, userName, answerLength, fanSince, favouritePlayer]);
 
   useEffect(() => {
-    setSavedActions(readActions(teamId, season));
+    let active = true;
+    const items = readActions(teamId, season);
+    queueMicrotask(() => { if (active) setSavedActions(items); });
+    return () => { active = false; };
   }, [teamId, season]);
 
   useEffect(() => {
@@ -497,7 +507,7 @@ export default function CompanionPage() {
             <div className={styles.welcomeText}>
               <span>Liiga · {team?.city || "Finland"}</span>
               <h3>{userName.trim() ? "Hi " + userName.trim() + "!" : "Hi!"} I follow {team?.name || "your team"} for you.</h3>
-              <p>Ask me anything, any time. Here's what I can do.</p>
+              <p>Ask me anything, any time. Here&apos;s what I can do.</p>
               <button type="button" onClick={() => document.getElementById("fan-chat")?.focus()}>
                 💬 Chat with me here
               </button>
