@@ -9,6 +9,7 @@ const links = [
   { href: "/", label: "Home" },
   { href: "/liiga", label: "Liiga" },
   { href: "/predictions", label: "Predictions" },
+  { href: "/pricing", label: "Pricing" },
 ];
 
 export default function SiteNav() {
