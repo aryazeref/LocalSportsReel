@@ -188,6 +188,11 @@ required. Real-provider calls require a key and network access to
 
 Read [docs/ROADMAP.md](docs/ROADMAP.md) for an incremental plan covering official Liiga ingestion, event-to-video synchronization, trust controls, personalization, and the hackathon demo.
 
+For the prediction feature, [docs/PREDICTION_DATA.md](docs/PREDICTION_DATA.md)
+inventories the available Liiga inputs, live verification, data-quality limits,
+competition rules still needed, and the proposed modelling sequence. It includes
+endpoint and field appendices; the prediction model itself is not implemented yet.
+
 ## Technical shape
 
 ```text
