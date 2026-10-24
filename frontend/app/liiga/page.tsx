@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import styles from "./liiga.module.css";
 
 type Team = { name: string; team_id: string | null; goals: number | null; logo_url: string | null };
@@ -117,20 +118,26 @@ function Form({ results }: { results: FormResult[] }) {
 export default function LiigaPage() {
   const [season, setSeason] = useState(currentSeason);
   const [selectedTeam, setSelectedTeam] = useState("");
-  const [data, setData] = useState<LiigaResponse | null>(null);
-  const [analysis, setAnalysis] = useState<AnalysisResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [analysisError, setAnalysisError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [analysisLoading, setAnalysisLoading] = useState(true);
   const [reload, setReload] = useState(0);
+  const matchRequestKey = JSON.stringify([season, selectedTeam, reload]);
+  const analysisRequestKey = JSON.stringify([season, reload]);
+  const [matchResult, setMatchResult] = useState<{
+    key: string; data: LiigaResponse | null; error: string | null;
+  } | null>(null);
+  const [analysisResult, setAnalysisResult] = useState<{
+    key: string; data: AnalysisResponse | null; error: string | null;
+  } | null>(null);
+  // A changed request immediately hides old data without resetting state in effects.
+  const loading = matchResult?.key !== matchRequestKey;
+  const analysisLoading = analysisResult?.key !== analysisRequestKey;
+  const data = loading ? null : matchResult.data;
+  const error = loading ? null : matchResult.error;
+  const analysis = analysisLoading ? null : analysisResult.data;
+  const analysisError = analysisLoading ? null : analysisResult.error;
 
   // These requests fail independently so analysis errors do not hide matches.
   useEffect(() => {
     const controller = new AbortController();
-    setData(null);
-    setError(null);
-    setLoading(true);
     async function loadMatches() {
       try {
         const query = new URLSearchParams({ season: String(season), limit: "12" });
@@ -140,22 +147,18 @@ export default function LiigaPage() {
         if (!Array.isArray(result.games) || result.data_mode !== "real" || result.season !== season) {
           throw new Error("The match response has an unexpected format.");
         }
-        if (!controller.signal.aborted) setData(result);
+        if (!controller.signal.aborted) setMatchResult({ key: matchRequestKey, data: result, error: null });
       } catch (caught) {
-        if (!controller.signal.aborted) setError(caught instanceof Error ? caught.message : "Unable to retrieve match data.");
-      } finally {
-        if (!controller.signal.aborted) setLoading(false);
+        if (!controller.signal.aborted) setMatchResult({ key: matchRequestKey, data: null,
+          error: caught instanceof Error ? caught.message : "Unable to retrieve match data." });
       }
     }
     void loadMatches();
     return () => controller.abort();
-  }, [season, selectedTeam, reload]);
+  }, [season, selectedTeam, reload, matchRequestKey]);
 
   useEffect(() => {
     const controller = new AbortController();
-    setAnalysis(null);
-    setAnalysisError(null);
-    setAnalysisLoading(true);
     async function loadAnalysis() {
       try {
         const response = await fetch(`${API_BASE}/api/liiga/analysis?season=${season}`, { signal: controller.signal });
@@ -164,18 +167,17 @@ export default function LiigaPage() {
           throw new Error("The team analysis response has an unexpected format.");
         }
         if (!controller.signal.aborted) {
-          setAnalysis(result);
+          setAnalysisResult({ key: analysisRequestKey, data: result, error: null });
           setSelectedTeam(current => current && !result.teams.some(team => team.team_id === current) ? "" : current);
         }
       } catch (caught) {
-        if (!controller.signal.aborted) setAnalysisError(caught instanceof Error ? caught.message : "Unable to retrieve team analysis.");
-      } finally {
-        if (!controller.signal.aborted) setAnalysisLoading(false);
+        if (!controller.signal.aborted) setAnalysisResult({ key: analysisRequestKey, data: null,
+          error: caught instanceof Error ? caught.message : "Unable to retrieve team analysis." });
       }
     }
     void loadAnalysis();
     return () => controller.abort();
-  }, [season, reload]);
+  }, [season, reload, analysisRequestKey]);
 
   const teams = analysis?.season === season ? analysis.teams : [];
   const activeTeam = teams.find(team => team.team_id === selectedTeam);
@@ -198,14 +200,14 @@ export default function LiigaPage() {
       <section className={styles.filters} aria-label="Liiga filters">
         <label>Season
           <select value={season} onChange={event => {
-            setSeason(Number(event.target.value)); setSelectedTeam(""); setData(null); setAnalysis(null);
+            setSeason(Number(event.target.value)); setSelectedTeam("");
           }}>
             {seasons.map(value => <option key={value} value={value}>{seasonLabel(value)}</option>)}
           </select>
         </label>
         <label className={styles.teamFilter}>Follow a team
           <select value={selectedTeam} disabled={analysisLoading || teams.length === 0} onChange={event => {
-            setSelectedTeam(event.target.value); setData(null);
+            setSelectedTeam(event.target.value);
           }}>
             <option value="">All teams</option>
             {teams.map(team => <option key={team.team_id} value={team.team_id}>{team.name}</option>)}
@@ -237,7 +239,7 @@ export default function LiigaPage() {
                 <strong>{activeTeam ? activeTeam.win_percentage == null ? "–" : `${activeTeam.win_percentage.toFixed(1)}%` : `${analysis.completed_games} / ${analysis.games_in_dataset}`}</strong>
                 <small>{activeTeam ? "Wins divided by completed matches" : "Completed results / returned fixtures"}</small></div>
             </div>
-            <div className={styles.tableWrap}>
+            <div className={styles.tableWrap} tabIndex={0} role="region" aria-label="Team statistics, scroll horizontally for all columns">
               <table className={styles.statsTable}>
                 <caption>Team statistics · {seasonLabel(season)} regular season · Listed alphabetically</caption>
                 <thead><tr>
@@ -273,7 +275,7 @@ export default function LiigaPage() {
         <p className={styles.scope}>{season === currentSeason()
           ? "Showing up to 12 matches from the past seven days onward, earliest first."
           : "Showing up to 12 matches from the selected season, earliest first."}{selectedTeam && " Filtered to your selected team."}</p>
-        {error && <div role="alert" className={styles.error}><strong>Couldn't load Liiga matches.</strong> {error}</div>}
+        {error && <div role="alert" className={styles.error}><strong>Couldn&apos;t load Liiga matches.</strong> {error}</div>}
         {loading && <p role="status" className={styles.notice}>Loading Liiga matches…</p>}
         {data?.season === season && <>
           {data.games.length === 0 && <p className={styles.notice}>No matches were returned for this team and date range. Try another season or team.</p>}
@@ -297,7 +299,7 @@ export default function LiigaPage() {
           <p className={styles.updated}>Match times are shown in Helsinki time · Fetched {formatStart(data.updated_at)}</p>
         </>}
       </section>
-      <footer className={styles.footer}><span>LocalSportsReel · Real games. More context.</span><a href="/">Explore the fictional story demo ↗</a></footer>
+      <footer className={styles.footer}><span>LocalSportsReel · Real games. More context.</span><Link href="/">Explore the fictional story demo ↗</Link></footer>
     </main>
   );
 }

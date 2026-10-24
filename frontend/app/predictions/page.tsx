@@ -132,7 +132,7 @@ function ForecastCard({ fixture, selected, onSelect }: { fixture: Forecast; sele
 }
 
 function MetricTable({ metrics, selected, rolling = false }: { metrics: ModelMetric[]; selected?: string; rolling?: boolean }) {
-  return <div className={styles.tableWrap}>
+  return <div className={styles.tableWrap} tabIndex={0} role="region" aria-label={rolling ? "Rolling historical policy comparison, scroll horizontally for all columns" : "Historical test results, scroll horizontally for all columns"}>
     <table className={styles.metricTable}>
       <caption>{rolling ? "Rolling historical policy comparison" : "Historical test results"} · lower log loss and Brier score are better</caption>
       <thead><tr><th scope="col">{rolling ? "Forecast policy" : "Model"}</th><th scope="col">Log loss</th><th scope="col">Brier score</th><th scope="col">Final-winner accuracy</th></tr></thead>
@@ -146,22 +146,24 @@ function MetricTable({ metrics, selected, rolling = false }: { metrics: ModelMet
 }
 
 export default function PredictionsPage() {
-  const [data, setData] = useState<PredictionsResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
+  const [forecastResult, setForecastResult] = useState<{
+    key: number; data: PredictionsResponse | null; error: string | null;
+  } | null>(null);
+  const loading = forecastResult?.key !== reload;
+  const data = loading ? null : forecastResult.data;
+  const error = loading ? null : forecastResult.error;
   const [selectedGame, setSelectedGame] = useState<number | null>(null);
   const [selectedOutcome, setSelectedOutcome] = useState<Outcome>("home_regulation");
   const [topN, setTopN] = useState(4);
-  const [impact, setImpact] = useState<ImpactResponse | null>(null);
-  const [impactLoading, setImpactLoading] = useState(false);
-  const [impactError, setImpactError] = useState<string | null>(null);
+  const [impactResult, setImpactResult] = useState<{
+    key: string; data: ImpactResponse | null; error: string | null;
+  } | null>(null);
   const [impactRetry, setImpactRetry] = useState(0);
   const [showAllFixtures, setShowAllFixtures] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
-    setData(null); setImpact(null); setError(null); setLoading(true);
     async function loadForecasts() {
       try {
         const response = await fetch(`${API_BASE}/api/liiga/predictions?limit=12`, { signal: controller.signal });
@@ -170,13 +172,12 @@ export default function PredictionsPage() {
           throw new Error("The forecast response has an unexpected format.");
         }
         if (controller.signal.aborted) return;
-        setData(result);
+        setForecastResult({ key: reload, data: result, error: null });
         setSelectedGame(current => current != null && result.fixtures.some(fixture => fixture.game_id === current)
           ? current : result.fixtures[0]?.game_id ?? null);
       } catch (caught) {
-        if (!controller.signal.aborted) setError(caught instanceof Error ? caught.message : "Forecasts are unavailable.");
-      } finally {
-        if (!controller.signal.aborted) setLoading(false);
+        if (!controller.signal.aborted) setForecastResult({ key: reload, data: null,
+          error: caught instanceof Error ? caught.message : "Forecasts are unavailable." });
       }
     }
     void loadForecasts();
@@ -186,12 +187,15 @@ export default function PredictionsPage() {
   const fixture = data?.fixtures.find(item => item.game_id === selectedGame);
   const forecastVersion = data?.generated_at;
   const modelVersion = data?.model.model_version;
+  const impactRequestKey = JSON.stringify([selectedGame, topN, forecastVersion, modelVersion, impactRetry]);
+  const canLoadImpact = selectedGame != null && Boolean(forecastVersion);
+  const impactLoading = canLoadImpact && impactResult?.key !== impactRequestKey;
+  const impact = canLoadImpact && impactResult?.key === impactRequestKey ? impactResult.data : null;
+  const impactError = canLoadImpact && impactResult?.key === impactRequestKey ? impactResult.error : null;
 
   useEffect(() => {
     const controller = new AbortController();
-    setImpact(null); setImpactError(null);
-    if (selectedGame == null || !forecastVersion) { setImpactLoading(false); return () => controller.abort(); }
-    setImpactLoading(true);
+    if (selectedGame == null || !forecastVersion) return () => controller.abort();
     async function loadImpact() {
       try {
         const query = new URLSearchParams({ top_n: String(topN), simulations: "4000" });
@@ -203,16 +207,15 @@ export default function PredictionsPage() {
           || !OUTCOMES.every(outcome => result.scenarios.some(scenario => scenario.outcome === outcome))) {
           throw new Error("The league-impact response has an unexpected format.");
         }
-        if (!controller.signal.aborted) setImpact(result);
+        if (!controller.signal.aborted) setImpactResult({ key: impactRequestKey, data: result, error: null });
       } catch (caught) {
-        if (!controller.signal.aborted) setImpactError(caught instanceof Error ? caught.message : "League-impact calculations are unavailable.");
-      } finally {
-        if (!controller.signal.aborted) setImpactLoading(false);
+        if (!controller.signal.aborted) setImpactResult({ key: impactRequestKey, data: null,
+          error: caught instanceof Error ? caught.message : "League-impact calculations are unavailable." });
       }
     }
     void loadImpact();
     return () => controller.abort();
-  }, [selectedGame, topN, forecastVersion, modelVersion, impactRetry]);
+  }, [selectedGame, topN, forecastVersion, modelVersion, impactRetry, impactRequestKey]);
 
   const activeImpact = impact?.game_id === selectedGame && impact.top_n === topN ? impact : null;
   const scenario = activeImpact?.scenarios.find(item => item.outcome === selectedOutcome);
@@ -239,7 +242,7 @@ export default function PredictionsPage() {
       </div>
       <div className={styles.headerActions}>
         <span className={styles.experimental}>Experimental forecasts</span>
-        <button className={styles.primaryButton} disabled={loading} onClick={() => { setData(null); setImpact(null); setReload(value => value + 1); }}>
+        <button className={styles.primaryButton} disabled={loading} onClick={() => setReload(value => value + 1)}>
           {loading ? "Preparing forecasts…" : "Refresh forecasts"}
         </button>
       </div>
@@ -381,7 +384,7 @@ export default function PredictionsPage() {
         {calibration.length > 0 && <details className={styles.notes}>
           <summary>Did the home-win chances match past outcomes?</summary>
           <p>{rollingEvaluation ? "Pooled historical forecasts from the selected policy" : "Historical test forecasts"} grouped by home-win probability. Compare the average forecast with how often the home team actually won. Small groups are less reliable.</p>
-          <div className={styles.tableWrap}><table className={styles.metricTable}>
+          <div className={styles.tableWrap} tabIndex={0} role="region" aria-label="Historical home-win calibration, scroll horizontally for all columns"><table className={styles.metricTable}>
             <caption>{rollingEvaluation ? "Selected policy" : "Selected model"} · historical home-win calibration check</caption>
             <thead><tr><th scope="col">Forecast band</th><th scope="col">Matches</th><th scope="col">Average forecast</th><th scope="col">Observed home wins</th></tr></thead>
             <tbody>{calibration.map((bin, index) => <tr key={index}><th scope="row">{percent(bin.lower, 0)}–{percent(bin.upper, 0)}</th>

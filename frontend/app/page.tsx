@@ -2,7 +2,7 @@
 
 // A Client Component can respond to clicks and update the browser immediately.
 // Later we can move non-interactive sections into Next.js Server Components.
-import { useEffect, useState } from "react"; // React hooks for state and side effects
+import { useEffect, useRef, useState } from "react"; // React hooks for state and side effects
 import type { FeedResponse, Moment, Story } from "../lib/types"; // Built-in TypeScript types for the API responses and data structures
 
 const API = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
@@ -75,6 +75,27 @@ export default function HomePage() {
   const [selectedMoment, setSelectedMoment] = useState<Moment | null>(null);
   const [story, setStory] = useState<Story | null>(null);
   const [storyLoading, setStoryLoading] = useState(false);
+  const modalRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const modal = modalRef.current;
+    if (!selectedMoment || !modal) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    modal.querySelector<HTMLButtonElement>("button")?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setSelectedMoment(null);
+      if (event.key !== "Tab") return;
+      const controls = modal.querySelectorAll<HTMLElement>("button, a[href], input, select, textarea, [tabindex='0']");
+      const first = controls[0], last = controls[controls.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    };
+    modal.addEventListener("keydown", onKeyDown);
+    return () => {
+      modal.removeEventListener("keydown", onKeyDown);
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
+  }, [selectedMoment]);
 
   // Whenever a filter changes, load a fresh filtered list from FastAPI.
   useEffect(() => {
@@ -125,11 +146,11 @@ export default function HomePage() {
           <p>Discover the remarkable players, unforgettable plays, and local stories happening right around you. You don’t have to follow the league to feel the game.</p>
           <div className="heroPills"><span>◎ Local-first</span><span>✦ AI storytelling</span><span>↗ Hidden talent</span></div>
         </div>
-        <div className="heroGraphic" aria-hidden="true"><div className="orbit orbitOne" /><div className="orbit orbitTwo" /><span className="heroAsterisk">✳</span><div className="heroSticker">YOUR CITY<br />YOUR GAME<span>↗</span></div></div>
+        <div className="heroGraphic" aria-hidden="true"><div className="orbit orbitOne" /><div className="orbit orbitTwo" /><span className="heroAsterisk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round"><path d="M12 2v20M2 12h20M5 5l14 14M5 19 19 5" /></svg></span><div className="heroSticker">YOUR CITY<br />YOUR GAME<span>↗</span></div></div>
       </section>
 
       <section className="discover" aria-labelledby="discover-heading">
-        <div className="sectionHeading"><div><div className="sectionLabel"><span className="labelDash" /> THE LOCAL PULSE</div><h2 id="discover-heading">Around your city<span className="headingDot">.</span></h2><p>A feed of moments you might have missed.</p></div><div className="demoBanner">ⓘ All match events are fictional demo data. No licensed footage is included.</div></div>
+        <div className="sectionHeading"><div><div className="sectionLabel"><span className="labelDash" /> THE LOCAL PULSE</div><h2 id="discover-heading">Around your city<span className="headingDot">.</span></h2><p>A feed of moments you might have missed.</p></div><div className="demoBanner"><span className="notice-label">Demo</span><span>ⓘ All match events are fictional demo data. No licensed footage is included.</span></div></div>
         <div className="filters">
           <label>YOUR CITY <select value={city} onChange={(e) => setCity(e.target.value)}>{cities.map((c) => <option key={c} value={c}>{c}</option>)}</select></label>
           <label>SPORT <select value={sport} onChange={(e) => setSport(e.target.value)}>{sports.map((s) => <option key={s} value={s}>{s}</option>)}</select></label>
@@ -147,15 +168,15 @@ export default function HomePage() {
       <footer className="footer"><span>LOCALREEL © 2026 · CONCEPT PROTOTYPE</span><span>BUILT FOR KALEVA MEDIA HACKATHON</span></footer>
 
       {selectedMoment && <div className="modalBackdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setSelectedMoment(null); }}>
-        <section className="storyModal" role="dialog" aria-modal="true" aria-label="Sports story">
+        <section ref={modalRef} className="storyModal" role="dialog" aria-modal="true" aria-label="Sports story">
           <div className="modalTop"><span className="sectionLabel">✦ MOMENT EXPLAINED</span><button className="closeButton" onClick={() => setSelectedMoment(null)} aria-label="Close story">×</button></div>
           <p className="modalMetadata">{selectedMoment.city} · {selectedMoment.sport} · {selectedMoment.league}</p>
           {storyLoading ? <p className="modalLoading">Preparing the grounded story…</p> : story && <>
             <h2>{story.headline}</h2><p className="narration">{story.narration}</p>
-            <div className="storyNotice">{story.disclaimer}</div>
+            <div className="storyNotice"><span className="notice-label">Demo</span><span>{story.disclaimer}</span></div>
             <h3 className="evidenceHeading">Evidence used</h3>
             <ul className="evidenceList">{story.evidence.map((f) => <li key={f.id}><span>↳</span> {f.text}<small>{f.source_id}</small></li>)}</ul>
-            <div className="storyMeta">{story.mode === "llm_draft" ? "AI-GENERATED DRAFT · REQUIRES HUMAN REVIEW" : "GROUNDED DEMONSTRATION TEMPLATE"}</div>
+            <div className={`storyMeta badge ${story.mode === "llm_draft" ? "badge-ai" : "badge-demo"}`}>{story.mode === "llm_draft" ? "AI-GENERATED DRAFT · REQUIRES HUMAN REVIEW" : "GROUNDED DEMONSTRATION TEMPLATE"}</div>
           </>}
         </section>
       </div>}

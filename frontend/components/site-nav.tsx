@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import ThemeToggle from "./theme-toggle";
 import styles from "./site-nav.module.css";
 
 const links = [
@@ -38,6 +39,7 @@ export default function SiteNav() {
             })}
           </ul>
         </nav>
+        <div className={styles.topbarRight}><ThemeToggle /></div>
       </div>
     </header>
   );
