@@ -1,0 +1,108 @@
+{
+  "id": 2701817,
+  "season": 2027,
+  "start": "2027-03-23T16:30:00Z",
+  "homeTeam": {
+    "teamId": "238306801:jokerit",
+    "teamPlaceholder": null,
+    "teamName": "Jokerit",
+    "goals": 0,
+    "timeOut": null,
+    "goalEvents": [],
+    "powerplayInstances": 0,
+    "powerplayGoals": 0,
+    "shortHandedInstances": 0,
+    "shortHandedGoals": 0,
+    "ranking": 16,
+    "gameStartDateTime": "2027-03-23T18:30:00+02:00",
+    "logos": {
+      "darkBg": "https://cdn.builder.io/api/v1/image/assets%2Ff11503eeae084753968caac3899a5d78%2Faaa8acd74adb43f4bfd3de3e9af484b0",
+      "lightBg": "https://cdn.builder.io/api/v1/image/assets%2Ff11503eeae084753968caac3899a5d78%2Faaa8acd74adb43f4bfd3de3e9af484b0",
+      "darkBgOriginal": null,
+      "lightBgOriginal": null
+    }
+  },
+  "awayTeam": {
+    "teamId": "461765763:kookoo",
+    "teamPlaceholder": null,
+    "teamName": "KooKoo",
+    "goals": 0,
+    "timeOut": null,
+    "goalEvents": [],
+    "powerplayInstances": 0,
+    "powerplayGoals": 0,
+    "shortHandedInstances": 0,
+    "shortHandedGoals": 0,
+    "ranking": 17,
+    "gameStartDateTime": "2027-03-23T18:30:00+02:00",
+    "logos": {
+      "darkBg": "https://cdn.builder.io/api/v1/image/assets%2Ff11503eeae084753968caac3899a5d78%2F7d933387f498496094d7ef1928e9fa7b",
+      "lightBg": "https://cdn.builder.io/api/v1/image/assets%2Ff11503eeae084753968caac3899a5d78%2F7d933387f498496094d7ef1928e9fa7b",
+      "darkBgOriginal": null,
+      "lightBgOriginal": null
+    }
+  },
+  "periods": [
+    {
+      "index": 1,
+      "homeTeamGoals": 0,
+      "awayTeamGoals": 0,
+      "category": "NORMAL",
+      "startTime": 0,
+      "endTime": 1200
+    },
+    {
+      "index": 2,
+      "homeTeamGoals": 0,
+      "awayTeamGoals": 0,
+      "category": "NORMAL",
+      "startTime": 1200,
+      "endTime": 2400
+    },
+    {
+      "index": 3,
+      "homeTeamGoals": 0,
+      "awayTeamGoals": 0,
+      "category": "NORMAL",
+      "startTime": 2400,
+      "endTime": 3600
+    },
+    {
+      "index": 4,
+      "homeTeamGoals": 0,
+      "awayTeamGoals": 0,
+      "category": "OVERTIME",
+      "startTime": 3600,
+      "endTime": 3900
+    },
+    {
+      "index": 5,
+      "homeTeamGoals": 0,
+      "awayTeamGoals": 0,
+      "category": "WINNING_SHOT_COMPETITION",
+      "startTime": 3900,
+      "endTime": 3900
+    }
+  ],
+  "finishedType": "ACTIVE_OR_NOT_STARTED",
+  "started": false,
+  "ended": false,
+  "gameTime": 0,
+  "playOffPair": 0,
+  "playOffPhase": 0,
+  "playOffReqWins": 0,
+  "buyTicketsUrl": "https://www.ticketmaster.fi/artist/jokerit-lippuja/973335",
+  "iceRink": {
+    "id": 17,
+    "name": "Helsinki Areena",
+    "latitude": 60.2053,
+    "longitude": 24.9302,
+    "streetAddress": "Areenakuja 1",
+    "zip": "00240",
+    "city": "HELSINKI"
+  },
+  "currentPeriod": 0,
+  "stale": false,
+  "serie": "RUNKOSARJA",
+  "gameWeek": 28
+}

@@ -1,27 +1,20 @@
-# Next.js / Node.js
+# Secrets and local configuration
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+
+# Next.js
 node_modules/
 .next/
 out/
-dist/
-npm-debug.log*
+*.tsbuildinfo
 
-# Python / FastAPI
-__pycache__/
-*.py[cod]
-.venv/
-venv/
-.pytest_cache/
-
-# Environment variables and secrets
-.env
-.env.*
-!.env.example
-!.env.*.example
-
-# IDE and operating system
-.vscode/
+# Other
 .DS_Store
-Thumbs.db
-
-# Deployment
-.vercel/
