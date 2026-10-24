@@ -44,6 +44,17 @@ function Answer({ reply }: { reply: CompanionReply }) {
       <span>{reply.engine}</span><span>Fact check: {reply.verification_status}</span>
     </div>
     {reply.forecast_warning && <p className={styles.muted}>{reply.forecast_warning}</p>}
+    {reply.impact_warning && <p className={styles.muted}>{reply.impact_warning}</p>}
+    {reply.impact && <div className={styles.forecastPreview}>
+      <strong>What-if: expected season points</strong>
+      <p className={styles.muted}>From the API_integration league-impact engine.
+        These are regular-season points scenarios, not exact qualification probabilities.</p>
+      {reply.impact.outcomes.map(outcome => <p key={outcome.outcome}>
+        {outcome.outcome.replaceAll("_", " ")}: {outcome.expected_points.toFixed(1)} expected points
+        {" "}({outcome.delta_points > 0 ? "+" : ""}{outcome.delta_points.toFixed(1)} vs baseline)
+      </p>)}
+      <Link href="/predictions">See scenario assumptions and limitations ↗</Link>
+    </div>}
     {reply.forecast && <div className={styles.forecastPreview}>
       <strong>Experimental forecast · {reply.forecast.model}</strong>
       <p>{reply.forecast.home_team}: {(reply.forecast.home_win * 100).toFixed(1)}% to win</p>
@@ -129,6 +140,7 @@ export default function CompanionPage() {
     setMessages([]);
     setScript(null);
     setForecast(null);
+    setSending(false);
     setError("");
   }
 
@@ -150,7 +162,9 @@ export default function CompanionPage() {
           team_id: teamId, season, kind, message: message.trim(),
           persona, language, use_ai: useAi,
           include_forecast: kind === "chat" &&
-            /\b(predict|forecast|chances?|probabilit|win|lose|tonight|what if)\b/i.test(message),
+            /\b(predict|forecast|chances?|probabilit|win|lose|tonight|what if|what happens|impact|points)\b/i.test(message),
+          include_impact: kind === "chat" &&
+            /what if|what happens|league.?impact|impact on|if .* win|if .* los|scenario/i.test(message),
           history: oldMessages.slice(-12).map(item => ({
             role: item.role, content: item.content,
           })),
