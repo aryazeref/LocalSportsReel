@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from .liiga_api import _dataset, current_season
+from .prediction.service import PredictionUnavailable, get_predictions
 from .services.companion_bridge import build_companion_snapshot, companion_response, team_options
 
 router = APIRouter(prefix="/api/companion", tags=["Fan companion"])
@@ -27,6 +28,8 @@ class CompanionRequest(BaseModel):
     language: Literal["English", "Finnish"] = "English"
     history: list[ChatTurn] = Field(default_factory=list, max_length=12)
     use_ai: bool = False
+    # Explicit opt-in prevents preparing the prediction model for every chat.
+    include_forecast: bool = False
 
 
 class Receipt(BaseModel):
@@ -34,6 +37,17 @@ class Receipt(BaseModel):
     label: str
     value: str
     source: str
+
+
+class CompanionForecast(BaseModel):
+    game_id: int
+    season: int
+    home_team: str
+    away_team: str
+    home_win: float
+    away_win: float
+    model: str
+    warnings: list[str]
 
 
 class CompanionResponse(BaseModel):
@@ -48,6 +62,8 @@ class CompanionResponse(BaseModel):
     data_source: str
     data_as_of: str
     is_mock: bool
+    forecast: CompanionForecast | None = None
+    forecast_warning: str | None = None
     model_note: str
 
 
@@ -74,6 +90,23 @@ async def respond(payload: CompanionRequest):
     snapshot = build_companion_snapshot(data)
     if not snapshot.teams:
         raise HTTPException(status_code=503, detail="No usable Liiga teams are available.")
+    # Use the authoritative feature/API_integration predictor only.
+    # No companion-side probability or playoff simulation runs here.
+    fixture = None
+    model_name = None
+    forecast_warning = None
+    if payload.include_forecast:
+        if chosen != current_season():
+            forecast_warning = "Forecasts are available for the current season only."
+        else:
+            try:
+                prediction = await get_predictions(limit=1, team_id=payload.team_id)
+                fixture = prediction.fixtures[0] if prediction.fixtures else None
+                model_name = prediction.model.display_name
+                if fixture is None:
+                    forecast_warning = "No upcoming match forecast is available for this team."
+            except PredictionUnavailable:
+                forecast_warning = "Prediction service is currently unavailable; no forecast was invented."
     try:
         # LLM clients and fact checking are synchronous: run off the event loop.
         return await asyncio.to_thread(
@@ -82,6 +115,8 @@ async def respond(payload: CompanionRequest):
             history=[item.model_dump() for item in payload.history],
             kind=payload.kind, persona=payload.persona,
             language=payload.language, use_ai=payload.use_ai,
+            forecast=fixture, forecast_model=model_name,
+            forecast_warning=forecast_warning,
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Selected team is not available.") from exc
