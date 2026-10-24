@@ -15,7 +15,8 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from ..services.liiga_client import SeasonGames
-from ..prediction.schemas import ForecastFixture
+from ..prediction.schemas import ForecastFixture, ImpactResponse
+from ..prediction.domain import canonical_team_id
 
 # A hyphenated directory is not a Python package name. Add its absolute folder
 # to the module search path and import the original library without copying it.
@@ -27,7 +28,7 @@ from companion.companion import Companion  # noqa: E402
 from companion.config import FORMATS, use_league  # noqa: E402
 from companion.data.providers import Snapshot  # noqa: E402
 from companion.facts import build_team_facts  # noqa: E402
-from companion.llm import OpenAIBackend  # noqa: E402
+from companion.llm import get_backend  # noqa: E402
 from companion.verify import verify  # noqa: E402
 
 HELSINKI = ZoneInfo("Europe/Helsinki")
@@ -110,6 +111,8 @@ def companion_response(
     kind: str, persona: str, language: str, use_ai: bool,
     forecast: ForecastFixture | None = None, forecast_model: str | None = None,
     forecast_warning: str | None = None,
+    impact: ImpactResponse | None = None,
+    impact_warning: str | None = None,
 ) -> dict:
     """Runs in a worker thread, so a network LLM never blocks the FastAPI event loop."""
     if team_id not in snapshot.teams:
@@ -140,8 +143,41 @@ def companion_response(
             "model": forecast_model or "Experimental pre-match model",
             "warnings": list(forecast.warnings),
         }
+    impact_summary = None
+    if impact is not None:
+        # All scenario numbers are returned by the existing evaluated predictor.
+        # The companion formats them; it does not run another season simulation.
+        selected = canonical_team_id(team_id)
+        outcomes = []
+        for index, scenario in enumerate(impact.scenarios):
+            projection = next(
+                (item for item in scenario.teams
+                 if canonical_team_id(item.team_id) == selected), None,
+            )
+            if projection is None:
+                continue
+            outcome_name = scenario.outcome.replace("_", " ")
+            key = "scenario_" + str(index)
+            source = "LocalSportsReel prediction engine, regular-season points simulation"
+            facts.add(key, outcome_name + " expected points",
+                      f"{projection.expected_points:.1f}", source)
+            facts.add(key + "_change", outcome_name + " expected points change",
+                      f"{projection.delta_points:+.1f}", source)
+            outcomes.append({
+                "outcome": scenario.outcome,
+                "expected_points": projection.expected_points,
+                "delta_points": projection.delta_points,
+                "expected_rank": projection.expected_rank,
+            })
+        if outcomes:
+            impact_summary = {
+                "game_id": impact.game_id, "model": impact.model_name,
+                "scope": impact.scope, "top_n": impact.top_n,
+                "outcomes": outcomes, "limitations": list(impact.limitations),
+                "warnings": list(impact.warnings),
+            }
     allowed = os.getenv("COMPANION_ENABLE_LLM", "false").lower() == "true"
-    backend = OpenAIBackend() if use_ai and allowed and os.getenv("OPENAI_API_KEY") else None
+    backend = get_backend() if use_ai and allowed else None
     agent = Companion(backend=backend, persona=persona, language=language, length="normal")
     if kind == "brief":
         reply = agent.brief(facts)
@@ -163,6 +199,18 @@ def companion_response(
                    + forecast.away_team.name + " " + away_pct + " to win "
                    + facts.c("forecast_away") + ". "
                    + "These are not betting odds or guarantees.")
+    if impact_summary is not None and kind == "chat":
+        lines = ["What-if scenarios (regular-season expected points, not exact playoff odds):"]
+        for index, item in enumerate(impact_summary["outcomes"]):
+            key = "scenario_" + str(index)
+            lines.append(
+                item["outcome"].replace("_", " ") + ": "
+                + f'{item["expected_points"]:.1f}' + " expected points "
+                + facts.c(key) + " (change "
+                + f'{item["delta_points"]:+.1f}' + " "
+                + facts.c(key + "_change") + ")."
+            )
+        output += "\n\n" + "\n".join(lines)
     report = verify(output, facts)
     if not report.ok:
         # Never expose output that fails the companion's own factual checks.
@@ -180,6 +228,7 @@ def companion_response(
         "data_source": snapshot.source, "data_as_of": snapshot.as_of,
         "is_mock": snapshot.is_mock, "forecast": forecast_info,
         "forecast_warning": forecast_warning,
+        "impact": impact_summary, "impact_warning": impact_warning,
         "model_note": ("All forecast probabilities come from the existing evaluated "
                        "API_integration prediction engine, never the fan-companion simulator. "
                        "Points-only league scenarios remain available on /predictions; "
