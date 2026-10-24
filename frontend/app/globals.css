@@ -224,3 +224,20 @@ h1, h2, h3, p { margin-top: 0; }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
 }
+
+
+/* Real Liiga match discovery: existing illustration system, factual information. */
+.matchGroup { padding-top:24px; margin-top:20px; border-top:1px solid var(--line); }
+.groupHeading { margin:12px 0 8px; font-size:clamp(25px,3vw,35px); letter-spacing:-.025em; }
+.homeScore strong { font-size:32px; color:var(--text); font-variant-numeric:tabular-nums; }
+.momentBody .homeScore { margin:0 0 8px; }
+.momentBody .matchVenue { margin:0 0 12px; }
+.momentBody .goalSummary { margin:0 0 14px; font-size:12px; color:var(--muted); line-height:1.6; }
+.sportStatic { color:var(--muted); font-size:var(--fs-small); padding-bottom:12px; }
+.reloadButton { min-height:var(--touch); border:1px solid var(--line-strong); border-radius:var(--r-pill); background:var(--surface); color:var(--text); padding:10px 16px; font-size:var(--fs-small); font-weight:700; }
+.reloadButton:hover { background:var(--surface-2); }
+.reloadButton:disabled { opacity:.65; }
+.feedSource { font-size:12px; color:var(--muted); margin:26px 0 0; line-height:1.7; }
+.visionLinks { display:flex; flex-wrap:wrap; gap:12px; margin-top:22px; }
+.visionLinks a { padding:9px 13px; border-radius:var(--r-pill); border:1px solid currentColor; color:var(--on-primary); text-decoration:none; font-size:12px; font-weight:800; }
+.visionLinks a:hover { background:var(--team); color:var(--team-ink); }

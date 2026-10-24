@@ -8,7 +8,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Local SportsReel — Closer to the game",
-  description: "Discover remarkable sports moments in your local community. Hackathon prototype with synthetic data.",
+  description: "Discover real Finnish Liiga matches, explore match predictions and join the matchday fan experience.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

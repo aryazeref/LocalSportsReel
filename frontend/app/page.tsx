@@ -1,185 +1,210 @@
-"use client";  // Tells Next.js that this component runs in the browser and can use React state and effects.
+"use client";
 
-// A Client Component can respond to clicks and update the browser immediately.
-// Later we can move non-interactive sections into Next.js Server Components.
-import { useEffect, useRef, useState } from "react"; // React hooks for state and side effects
-import type { FeedResponse, Moment, Story } from "../lib/types"; // Built-in TypeScript types for the API responses and data structures
+/**
+ * LocalSportsReel's home is a REAL Liiga match discovery page.
+ *
+ * The original /api/feed returned fictional Moment objects with an athlete,
+ * radius and imaginary story. /api/liiga/discover instead returns actual
+ * games, scores, venues and events. We never invent a story, geolocation,
+ * athlete, video URL, or score to make the old card format fit.
+ */
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import type { DiscoveryGame, DiscoveryResponse } from "../lib/liiga-discovery";
+import { isDiscoveryResponse } from "../lib/liiga-discovery";
 
-const API = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
-const cities = ["Oulu", "Rovaniemi", "Tampere", "Helsinki"];
-const sports = ["All", "Ice hockey", "Football", "Basketball"];
+const API = (process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000").replace(/\/$/, "");
 
-// Function that transforms sport names into emoji icons for display in the UI.
-function sportIcon(sport: string): string {
-  if (sport === "Ice hockey") return "🏒";
-  if (sport === "Football") return "⚽";
-  if (sport === "Basketball") return "🏀";
-  return "🏅";
+function formatGameDate(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Match time not available";
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/Helsinki", dateStyle: "medium", timeStyle: "short",
+  }).format(date);
 }
-
-// Turns timestamp into a readable date format.
-function momentDate(value: string): string {
-  return new Intl.DateTimeFormat("en-GB", { month: "short", day: "numeric" }).format(new Date(value));
+function score(game: DiscoveryGame): string {
+  if (game.status === "upcoming") return "vs";
+  const a = game.home_team.goals, b = game.away_team.goals;
+  return a == null || b == null ? "Score unavailable" : a + "–" + b;
 }
-
-function MomentCard({ moment, featured, onOpen }: {
-  moment: Moment;
-  featured: boolean;
-  onOpen: (moment: Moment) => void;
-}) {
-  //const styleClass = moment.sport === "Ice hockey" ? "ice" : moment.sport === "Football" ? "football" : "basketball";
-  let styleClass;
-  switch(moment.sport) {
-    case "Ice Hockey": styleClass = "ice"; break; 
-    case "Football": styleClass = "football"; break;
-    case "Basketball": styleClass = "basketball"; break;
-    default: 
-    styleClass = "basketball"; break;
+function matchTitle(game: DiscoveryGame): string {
+  return game.home_team.name + " vs " + game.away_team.name;
+}
+function statusLabel(status: DiscoveryGame["status"]): string {
+  switch (status) {
+    case "live": return "LIVE · AS REPORTED";
+    case "finished": return "FINAL RESULT";
+    case "upcoming": return "UPCOMING MATCH";
+    default: return "MATCH CANCELLED";
   }
-  return (
-    <article className={`momentCard ${featured ? "featured" : ""}`}>
-      {/* This is deliberately an illustrated event card, NOT a video. */}
-      <div className={`momentArt ${styleClass}`}>
-        <div className="artCircle artCircleOne" />
-        <div className="artCircle artCircleTwo" />
-        <span className="sportArt" aria-hidden="true">{sportIcon(moment.sport)}</span>
-        <div className="artTop">
-          <span className="artChip">✦ {moment.sport}</span>
-          <span className="artChip darkChip">{moment.city}</span>
-        </div>
-        <span className="artBottom">DATA-DRIVEN STORY · NO VIDEO FOOTAGE</span>
+}
+function MatchCard({ game, featured }: { game: DiscoveryGame; featured: boolean }) {
+  const goals = game.goal_events.filter(event => event.scorer && event.scorer !== "Unknown scorer").slice(0, 2);
+  const venue = [game.venue, game.city].filter(Boolean).join(" · ");
+
+  return <article className={"momentCard " + (featured ? "featured" : "")}>
+    <div className="momentArt ice">
+      <div className="artCircle artCircleOne" />
+      <div className="artCircle artCircleTwo" />
+      <span className="sportArt" aria-hidden="true">🏒</span>
+      <div className="artTop">
+        <span className="artChip">Liiga · ice hockey</span>
+        <span className="artChip darkChip">{game.city || "Venue not reported"}</span>
       </div>
-      <div className="momentBody">
-        <div className="eyebrow">{moment.team} <span>·</span> {momentDate(moment.happened_at)}</div>
-        <h3>{moment.title}</h3>
-        <p><strong>{moment.athlete}</strong> · {moment.moment_type} · {moment.score}</p>
-        <div className="momentFooter">
-          <span className="distance">⌖ {moment.distance_km.toFixed(0)} km away</span>
-          <button className="storyButton" onClick={() => onOpen(moment)} aria-label={`Read the AI story for ${moment.title}`}>
-            Explore story <span aria-hidden="true">↗</span>
-          </button>
-        </div>
+      <span className="artBottom">REAL MATCH DATA · NO VIDEO FOOTAGE</span>
+    </div>
+    <div className="momentBody">
+      <div className="eyebrow"><time dateTime={game.start}>{formatGameDate(game.start)}</time> <span>·</span> {statusLabel(game.status)}</div>
+      <h3>{matchTitle(game)}</h3>
+      <p className="homeScore"><strong>{score(game)}</strong></p>
+      <p className="matchVenue">{venue || "Venue not available"}</p>
+      {goals.length > 0 && <p className="goalSummary">
+        {goals.map(goal => (goal.team_side === "home" ? game.home_team.name : game.away_team.name)
+          + ": " + goal.scorer).join(" · ")}
+        {game.goal_events.length > 2 ? " · More goals in match centre" : ""}
+      </p>}
+      <div className="momentFooter">
+        <span className="distance">{game.status === "finished" ? "Full time" :
+          game.status === "live" ? "Match in progress (provider)" : "Scheduled"}</span>
+        <Link className="storyButton" href="/liiga">
+          Match centre <span aria-hidden="true">↗</span>
+        </Link>
       </div>
-    </article>
-  );
+    </div>
+  </article>;
+}
+
+function MatchSection({ title, subtitle, games, label }: {
+  title: string; subtitle: string; games: DiscoveryGame[]; label: string;
+}) {
+  if (!games.length) return null;
+  return <section className="matchGroup" aria-label={title}>
+    <div className="sectionHeading">
+      <div><div className="sectionLabel"><span className="labelDash" /> {label}</div>
+        <h3 className="groupHeading">{title}</h3><p>{subtitle}</p></div>
+      <span className="resultCount">{games.length} {games.length === 1 ? "MATCH" : "MATCHES"}</span>
+    </div>
+    <div className="cardsGrid">{games.map((game, index) => <MatchCard
+      key={game.season + ":" + game.id} game={game} featured={index === 0}/>)}</div>
+  </section>;
 }
 
 export default function HomePage() {
-  // React state is the current screen's memory: update it, then React redraws.
-  const [city, setCity] = useState("Oulu"); // city = current value, setCity = function to update it
-  const [radius, setRadius] = useState(50);
-  const [sport, setSport] = useState("All");
-  const [feed, setFeed] = useState<FeedResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [selectedMoment, setSelectedMoment] = useState<Moment | null>(null);
-  const [story, setStory] = useState<Story | null>(null);
-  const [storyLoading, setStoryLoading] = useState(false);
-  const modalRef = useRef<HTMLElement>(null);
+  // A city means the location of the venue, not a radius around the user.
+  // Liiga does not provide a reliable "distance from me" field.
+  const [city, setCity] = useState("");
+  const [reload, setReload] = useState(0);
+  const [result, setResult] = useState<{
+    key: string; response: DiscoveryResponse | null; error: string | null;
+  } | null>(null);
+  const requestKey = JSON.stringify([city, reload]);
+  const loading = result?.key !== requestKey;
+  const data = loading ? null : result?.response ?? null;
+  const error = loading ? null : result?.error;
+  const availableCities = result?.response?.cities ?? [];
 
-  useEffect(() => {
-    const modal = modalRef.current;
-    if (!selectedMoment || !modal) return;
-    const previousFocus = document.activeElement as HTMLElement | null;
-    modal.querySelector<HTMLButtonElement>("button")?.focus();
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setSelectedMoment(null);
-      if (event.key !== "Tab") return;
-      const controls = modal.querySelectorAll<HTMLElement>("button, a[href], input, select, textarea, [tabindex='0']");
-      const first = controls[0], last = controls[controls.length - 1];
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
-      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
-    };
-    modal.addEventListener("keydown", onKeyDown);
-    return () => {
-      modal.removeEventListener("keydown", onKeyDown);
-      if (previousFocus?.isConnected) previousFocus.focus();
-    };
-  }, [selectedMoment]);
-
-  // Whenever a filter changes, load a fresh filtered list from FastAPI.
   useEffect(() => {
     const controller = new AbortController();
-    async function loadFeed() {
-      setLoading(true);
-      setError(null);
+    async function load() {
       try {
-        const query = new URLSearchParams({ city, radius_km: String(radius), sport });
-        const response = await fetch(`${API}/api/feed?${query}`, { signal: controller.signal });
-        if (!response.ok) throw new Error(`Backend returned HTTP ${response.status}`);
-        setFeed((await response.json()) as FeedResponse);
-      } catch (err) {
-        if (!controller.signal.aborted) {
-          setError(err instanceof Error ? err.message : "Unable to load local moments");
-          setFeed(null);
+        const params = new URLSearchParams();
+        if (city) params.set("city", city);
+        const query = params.size ? "?" + params.toString() : "";
+        const response = await fetch(API + "/api/liiga/discover" + query, { signal: controller.signal });
+        if (!response.ok) {
+          let detail = "Liiga data is currently unavailable (HTTP " + response.status + ").";
+          try {
+            const body: unknown = await response.json();
+            if (body && typeof body === "object" && "detail" in body
+              && typeof (body as { detail: unknown }).detail === "string") {
+              detail = (body as { detail: string }).detail;
+            }
+          } catch { /* Provider/proxy may return plain text. */ }
+          throw new Error(detail);
         }
-      } finally {
-        if (!controller.signal.aborted) setLoading(false);
+        const payload: unknown = await response.json();
+        if (!isDiscoveryResponse(payload)) throw new Error("Unexpected Liiga match format.");
+        if (!controller.signal.aborted) setResult({ key: requestKey, response: payload, error: null });
+      } catch (reason) {
+        if (!controller.signal.aborted) setResult({
+          key: requestKey, response: null,
+          error: reason instanceof Error ? reason.message : "Could not load matches.",
+        });
       }
     }
-    void loadFeed();
+    void load();
     return () => controller.abort();
-  }, [city, radius, sport]);
+  }, [city, reload, requestKey]);
 
-  async function openStory(moment: Moment) {
-    setSelectedMoment(moment);
-    setStory(null);
-    setStoryLoading(true);
-    try {
-      const response = await fetch(`${API}/api/stories/${encodeURIComponent(moment.id)}`, { method: "POST" });
-      if (!response.ok) throw new Error(`Could not create story (HTTP ${response.status})`);
-      setStory((await response.json()) as Story);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not generate the story");
-      setSelectedMoment(null);
-    } finally {
-      setStoryLoading(false);
-    }
-  }
-
-  return (
-    <main className="appShell">
-      <section className="hero">
-        <div className="heroText">
-          <div className="sectionLabel"><span className="labelDash" /> A NEW WAY TO FOLLOW SPORTS</div>
-          <h1>THE BEST MOMENTS<br /><span>HAPPEN <em>CLOSER.</em></span></h1>
-          <p>Discover the remarkable players, unforgettable plays, and local stories happening right around you. You don’t have to follow the league to feel the game.</p>
-          <div className="heroPills"><span>◎ Local-first</span><span>✦ AI storytelling</span><span>↗ Hidden talent</span></div>
+  const total = data ? data.live.length + data.recent.length + data.upcoming.length : 0;
+  return <main className="appShell">
+    <section className="hero">
+      <div className="heroText">
+        <div className="sectionLabel"><span className="labelDash" /> FINNISH HOCKEY, CLOSER TO HOME</div>
+        <h1>YOUR CITY.<br /><span>YOUR <em>GAME.</em></span></h1>
+        <p>Discover real Liiga results and upcoming games, follow your favourite clubs and explore what each match means for the season.</p>
+        <div className="heroPills">
+          <span>◎ Real Liiga matches</span><span>↗ Matchday community</span><span>✦ Predictions</span>
         </div>
-        <div className="heroGraphic" aria-hidden="true"><div className="orbit orbitOne" /><div className="orbit orbitTwo" /><span className="heroAsterisk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round"><path d="M12 2v20M2 12h20M5 5l14 14M5 19 19 5" /></svg></span><div className="heroSticker">YOUR CITY<br />YOUR GAME<span>↗</span></div></div>
-      </section>
+      </div>
+      <div className="heroGraphic" aria-hidden="true">
+        <div className="orbit orbitOne"/><div className="orbit orbitTwo"/>
+        <span className="heroAsterisk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round"><path d="M12 2v20M2 12h20M5 5l14 14M5 19 19 5"/></svg></span>
+        <div className="heroSticker">YOUR CITY<br/>YOUR GAME<span>↗</span></div>
+      </div>
+    </section>
 
-      <section className="discover" aria-labelledby="discover-heading">
-        <div className="sectionHeading"><div><div className="sectionLabel"><span className="labelDash" /> THE LOCAL PULSE</div><h2 id="discover-heading">Around your city<span className="headingDot">.</span></h2><p>A feed of moments you might have missed.</p></div><div className="demoBanner"><span className="notice-label">Demo</span><span>ⓘ All match events are fictional demo data. No licensed footage is included.</span></div></div>
-        <div className="filters">
-          <label>YOUR CITY <select value={city} onChange={(e) => setCity(e.target.value)}>{cities.map((c) => <option key={c} value={c}>{c}</option>)}</select></label>
-          <label>SPORT <select value={sport} onChange={(e) => setSport(e.target.value)}>{sports.map((s) => <option key={s} value={s}>{s}</option>)}</select></label>
-          <label className="radiusLabel">DISTANCE <div className="rangeRow"><input aria-label="Discovery distance" type="range" min="5" max="500" step="5" value={radius} onChange={(e) => setRadius(Number(e.target.value))} /><span>{radius} KM</span></div></label>
-          <span className="resultCount">{loading ? "SEARCHING…" : `${feed?.total ?? 0} MOMENTS FOUND`}</span>
+    <section className="discover" aria-labelledby="discover-heading">
+      <div className="sectionHeading">
+        <div><div className="sectionLabel"><span className="labelDash"/> THE LOCAL PULSE</div>
+          <h2 id="discover-heading">Matchday near you<span className="headingDot">.</span></h2>
+          <p>Latest real results and fixtures from the Liiga regular season.</p></div>
+        <div className="demoBanner">
+          <span className="notice-label">Match data</span>
+          <span>Scores and schedules come from Liiga. These are illustrated match cards, not video highlights.</span>
         </div>
+      </div>
+      <div className="filters">
+        <label>VENUE CITY
+          <select value={city} onChange={event => setCity(event.target.value)}>
+            <option value="">All cities</option>
+            {availableCities.map(value => <option value={value} key={value}>{value}</option>)}
+          </select>
+        </label>
+        <span className="sportStatic">🏒 Liiga · Ice hockey</span>
+        <button type="button" className="reloadButton" onClick={() => setReload(count => count + 1)}
+          disabled={loading}>{loading ? "Updating…" : "↻ Refresh"}</button>
+        <span className="resultCount">{loading ? "LOADING…" : total + " MATCHES"}</span>
+      </div>
+      {error && <div className="errorMessage" role="alert">
+        {error} Make sure FastAPI is running on {API}.</div>}
+      {loading && <p className="statusMessage" role="status">Loading real Liiga fixtures…</p>}
+      {data && total === 0 && <p className="statusMessage">There are no matches for this venue city in the selected season.</p>}
+      {data && <>
+        <MatchSection label="AS REPORTED BY LIIGA" title="Games in progress"
+          subtitle="Match status and scores are based on the latest available API snapshot."
+          games={data.live} />
+        <MatchSection label="RECENT RESULTS" title="The latest final scores"
+          subtitle="Completed matches, most recent first."
+          games={data.recent} />
+        <MatchSection label="LOOKING AHEAD" title="Coming up next"
+          subtitle="The next scheduled games in the regular season."
+          games={data.upcoming} />
+        <p className="feedSource">Source: {data.source} · Fetched {formatGameDate(data.updated_at)} (Helsinki time) · Only venues with available city information can be city-filtered.</p>
+      </>}
+    </section>
 
-        {error && <div className="errorMessage" role="alert">{error}. Make sure the Python backend is running at {API}.</div>}
-        {loading && <div className="statusMessage">Finding nearby stories…</div>}
-        {!loading && feed?.moments.length === 0 && <div className="statusMessage">No moments match these filters. Try a different sport or increase your distance.</div>}
-        {!loading && feed && feed.moments.length > 0 && <div className="cardsGrid">{feed.moments.map((moment, index) => <MomentCard key={moment.id} moment={moment} featured={index === 0} onOpen={(m) => void openStory(m)} />)}</div>}
-      </section>
-
-      <section className="vision"><div><span className="visionKicker">THE NEXT CHAPTER</span><h2>Big stories. <span>Small towns.</span></h2><p>Next: authorized video clips, athlete-follow feeds, short audio briefings, and match-impact simulations. Built for the communities behind every game.</p></div><div className="visionStamp">BEYOND<br />THE<br />SCOREBOARD <span>↗</span></div></section>
-      <footer className="footer"><span>LOCALREEL © 2026 · CONCEPT PROTOTYPE</span><span>BUILT FOR KALEVA MEDIA HACKATHON</span></footer>
-
-      {selectedMoment && <div className="modalBackdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setSelectedMoment(null); }}>
-        <section ref={modalRef} className="storyModal" role="dialog" aria-modal="true" aria-label="Sports story">
-          <div className="modalTop"><span className="sectionLabel">✦ MOMENT EXPLAINED</span><button className="closeButton" onClick={() => setSelectedMoment(null)} aria-label="Close story">×</button></div>
-          <p className="modalMetadata">{selectedMoment.city} · {selectedMoment.sport} · {selectedMoment.league}</p>
-          {storyLoading ? <p className="modalLoading">Preparing the grounded story…</p> : story && <>
-            <h2>{story.headline}</h2><p className="narration">{story.narration}</p>
-            <div className="storyNotice"><span className="notice-label">Demo</span><span>{story.disclaimer}</span></div>
-            <h3 className="evidenceHeading">Evidence used</h3>
-            <ul className="evidenceList">{story.evidence.map((f) => <li key={f.id}><span>↳</span> {f.text}<small>{f.source_id}</small></li>)}</ul>
-            <div className={`storyMeta badge ${story.mode === "llm_draft" ? "badge-ai" : "badge-demo"}`}>{story.mode === "llm_draft" ? "AI-GENERATED DRAFT · REQUIRES HUMAN REVIEW" : "GROUNDED DEMONSTRATION TEMPLATE"}</div>
-          </>}
-        </section>
-      </div>}
-    </main>
-  );
+    <section className="vision">
+      <div><span className="visionKicker">FOLLOW EVERY MATCH</span>
+        <h2>More than <span>the scoreboard.</span></h2>
+        <p>Visit the Liiga match hub for fan reactions and match information.
+          Explore predictions to see how possible results could change the league.</p>
+        <div className="visionLinks"><Link href="/liiga">Liiga &amp; Fan Zone ↗</Link>
+          <Link href="/predictions">Explore predictions ↗</Link></div>
+      </div>
+      <div className="visionStamp">BEYOND<br/>THE<br/>SCOREBOARD <span>↗</span></div>
+    </section>
+    <footer className="footer"><span>LOCALSPORTSREEL © 2026 · LIIGA MATCH DISCOVERY</span>
+      <span>STATISTICAL FORECASTS ARE EXPERIMENTAL · NO LICENSED FOOTAGE</span></footer>
+  </main>;
 }
