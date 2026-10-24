@@ -48,11 +48,12 @@ class MockProvider:
     source_name = "Mock Liiga data"
     is_mock = True
 
-    def __init__(self, path=MOCK_DIR):
+    def __init__(self, path=MOCK_DIR, source_name: str = "Mock Liiga data", sport: str = "hockey"):
         self.path = path
+        self.source_name = source_name
         if not (path / "games.json").exists():
-            from companion.data.generate_mock import generate
-            generate(path)
+            from companion.data.generate_mock import generate, generate_demo
+            generate(path) if sport == "hockey" else generate_demo(sport, path)
 
     def _load(self, name):
         return json.loads((self.path / name).read_text(encoding="utf-8"))
@@ -182,13 +183,16 @@ def teams_from(raw_teams, schedule: list[dict]) -> dict[str, dict]:
             tid = team_key(g.get(f"{side}TeamId"), g.get(f"{side}TeamName"))
             if tid and tid not in teams:
                 teams[tid] = {"id": tid, "name": g.get(f"{side}TeamName") or tid, "city": ""}
+            elif tid and g.get(f"{side}TeamName"):  # /teams only has abbreviations ("KÄR"); the schedule has "Kärpät"
+                teams[tid]["name"] = g[f"{side}TeamName"]
         city = (g.get("iceRink") or {}).get("city")
         if city:
             home = team_key(g.get("homeTeamId"), g.get("homeTeamName"))
             cities.setdefault(home, {})[city] = cities.setdefault(home, {}).get(city, 0) + 1
     for tid, seen in cities.items():
         if tid in teams and not teams[tid].get("city"):
-            teams[tid]["city"] = max(seen, key=seen.get)
+            city = max(seen, key=seen.get)
+            teams[tid]["city"] = city.title() if city.isupper() else city  # API sends "MIKKELI"
     # Only keep teams that actually play in this serie
     playing = {team_key(g.get(f"{s}TeamId"), g.get(f"{s}TeamName")) for g in schedule for s in ("home", "away")}
     return {k: v for k, v in teams.items() if k in playing} if playing else teams
@@ -298,4 +302,9 @@ def game_events(details: dict, game: dict) -> list[dict]:
 
 
 def get_provider(kind: str = "mock"):
-    return LiigaApiProvider() if kind == "liiga" else MockProvider()
+    if kind == "liiga":
+        return LiigaApiProvider()
+    if kind in ("football", "floorball", "basketball", "bandy"):  # no feed yet: clearly labelled demo season
+        from companion.config import demo_dir
+        return MockProvider(demo_dir(kind), f"Demo {kind} data", sport=kind)
+    return MockProvider()

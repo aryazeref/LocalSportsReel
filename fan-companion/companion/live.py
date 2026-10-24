@@ -1,7 +1,7 @@
 """Game Night: play tonight's game event by event, then update the season picture.
 
-With the mock source, tonight's game is simulated from team strengths.
-With the real API, the same functions consume the live event feed.
+Tonight's game is simulated from team strengths (real data or mock alike).
+The event shapes match the API's feed, so a live feed can replace the simulation later.
 """
 from __future__ import annotations
 
@@ -45,7 +45,10 @@ def event_facts(snap: Snapshot, game: dict, ev: dict) -> FactStore:
     H, A = snap.name(game["home"]), snap.name(game["away"])
     fs.add("score", "Score now", f"{H} {ev['home_score']}–{ev['away_score']} {A}", "Live event feed")
     if ev.get("period") is not None:
-        per = {"OT": "overtime", "SO": "shootout"}.get(ev["period"], f"period {ev['period']}")
+        names = LEAGUE.period_names
+        per = {"OT": "overtime", "SO": "shootout"}.get(
+            ev["period"], names[ev["period"] - 1] if isinstance(ev["period"], int) and ev["period"] <= len(names)
+            else f"period {ev['period']}")
         fs.add("time", "Game time", f"{per}, {ev['clock']}" if ev.get("clock") else per, "Live event feed")
     if ev.get("team"):
         fs.add("ev_team", "Team", snap.name(ev["team"]), "Live event feed")
@@ -71,8 +74,9 @@ def postgame_facts(before: Snapshot, after: Snapshot, team: str, game: dict,
     src_sim = f"Season simulation · {scen_after.n:,} runs"
 
     fs.add("final", "Final score", game_line(after, game), src_live)
-    fs.add("result", f"{T} result", {"W": "win in regulation", "OTW": "win in overtime/shootout",
-                                      "OTL": "loss in overtime/shootout", "L": "loss in regulation"}[res["outcome"]],
+    reg = "" if LEAGUE.draws or LEAGUE.points_ot_win == LEAGUE.points_reg_win else " in regulation"
+    fs.add("result", f"{T} result", {"W": f"win{reg}", "OTW": "win in overtime/shootout", "D": "draw",
+                                      "OTL": "loss in overtime/shootout", "L": f"loss{reg}"}[res["outcome"]],
            src_live)
     fs.add("points_earned", f"Points {T} earned tonight", res["points"], src_calc)
     fs.add("points_after", f"{T} points now", ra.pts, src_calc)
@@ -85,7 +89,7 @@ def postgame_facts(before: Snapshot, after: Snapshot, team: str, game: dict,
     fs.add("top6_change", f"Change in {T} top-{LEAGUE.direct_spots} chance",
            f"{'up' if ch > 0 else 'down' if ch < 0 else 'unchanged,'} {abs(ch)} percentage point{'' if abs(ch) == 1 else 's'}",
            src_sim)
-    fs.add("top10_after", f"{T} chance of reaching the playoffs incl. play-in now", pct(scen_after.p_top10[team]),
+    fs.add("top10_after", f"{T} chance of reaching the playoffs (top {LEAGUE.playin_last}) now", pct(scen_after.p_top10[team]),
            src_sim)
 
     goals = {}
