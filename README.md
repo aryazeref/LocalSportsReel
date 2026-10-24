@@ -1,5 +1,8 @@
 # Local SportsReel · Hackathon MVP 0.1
 
+> **Unified demo:** The new Next.js `/companion` page combines the Python Fan Companion's fact-verified chat and briefings with existing FastAPI Liiga/prediction services. See [integration documentation](docs/UNIFIED_PLATFORM.md). The Streamlit prototype is retained but is no longer required to use the unified website.
+
+
 **Pitch:** Discover the best sports moments happening nearby, even if you don't normally follow a league. A bounded agent discovers and ranks local structured match events, validates provenance, and creates a short grounded story.
 
 > **Data sources:** The homepage remains a fictional sports-story demo. The separate `/liiga` page fetches real Liiga fixtures and results and displays backend-calculated team statistics. No real video clips or location tracking are included. Do not publish sample stories from the homepage as real news.
