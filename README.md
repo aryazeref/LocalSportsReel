@@ -192,6 +192,9 @@ For the prediction feature, [docs/PREDICTION_DATA.md](docs/PREDICTION_DATA.md)
 inventories the available Liiga inputs, live verification, data-quality limits,
 competition rules still needed, and the proposed modelling sequence. It includes
 endpoint and field appendices; the prediction model itself is not implemented yet.
+The [paper review](docs/PREDICTION_PAPER_REVIEW.md) maps Berrar, Lopes and
+Dubitzky's 2024 soccer framework to a proposed Liiga feature set, evaluation
+design and competition-impact extension.
 
 ## Technical shape
 
