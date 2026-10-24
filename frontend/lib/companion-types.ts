@@ -7,6 +7,11 @@ export type CompanionAiStatus = {
 };
 export type CompanionTeam = { id: string; name: string; city: string };
 export type CompanionSuggestion = { label: string; question: string };
+export type CompanionOverview = {
+  team_id: string; name: string; rank: string; points: string;
+  games_played: string; points_gap: string; next_game: string | null;
+  data_source: string; data_as_of: string;
+};
 export type CompanionLocalAction =
   | { tool: "set_alert"; team_id: string; season: number; threshold: number | null }
   | { tool: "save_prediction"; team_id: string; season: number;
@@ -78,4 +83,5 @@ export type ChatMessage = {
   role: "user" | "assistant";
   content: string;
   reply?: CompanionReply;
+  actionSaved?: boolean;
 };

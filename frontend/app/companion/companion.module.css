@@ -84,3 +84,60 @@
 .aiMode, .offlineMode { font-size:11px; font-weight:800; }
 .aiMode { color:var(--primary); }
 .offlineMode { color:var(--muted); }
+
+
+/* Streamlit parity: welcome hero and capability grid. Keep the original image
+   as a separate public asset, not a hotlinked external image. */
+.sidebarBrand { display:flex; flex-direction:column; gap:5px; }
+.sidebarBrand strong { font-size:17px; line-height:1.25; letter-spacing:-.04em; }
+.sidebarBrand strong span { color:var(--primary); }
+.sidebarBrand small { font-size:11px; color:var(--muted); }
+.sidebar input[type=text] { width:100%; min-width:0; padding:12px; color:var(--text); background:var(--surface);
+ border:1px solid var(--line-strong); border-radius:var(--r-sm); font:inherit; }
+.sidebar select:disabled { opacity:.8; cursor:default; }
+.welcome { padding:0 22px 25px; }
+.welcomePhoto { height:240px; position:relative; overflow:hidden; border-radius:var(--r-lg);
+ background:var(--surface-2); isolation:isolate; }
+.welcomePhoto img { width:100%; height:100%; object-fit:cover; object-position:center 42%; }
+.welcomePhoto:after { content:""; z-index:0; position:absolute; inset:0;
+ background:linear-gradient(90deg,rgba(5,15,28,.84),rgba(5,15,28,.35) 77%,rgba(5,15,28,.08)); }
+.welcomeText { position:absolute; z-index:1; left:28px; bottom:25px; color:#fff; width:min(85%,560px); }
+.welcomeText > span { font-size:11px; font-weight:800; opacity:.85; letter-spacing:.1em; text-transform:uppercase; }
+.welcomeText h3 { font-size:clamp(21px,3.4vw,34px); letter-spacing:-.035em; line-height:1.2; margin:9px 0; }
+.welcomeText p { font-size:13px; opacity:.9; margin-bottom:12px; }
+.welcomeText button { border:0; background:#fff; color:#172637; padding:10px 16px;
+ border-radius:var(--r-pill); font-size:12px; font-weight:800; cursor:pointer; }
+.capabilityGrid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-top:13px; }
+.capabilityCard { background:var(--surface-2); border:1px solid var(--line); border-radius:var(--r-md); padding:13px; min-width:0; }
+.featureIcon { font-size:20px; display:block; margin-bottom:8px; }
+.featureHeading { display:flex; flex-wrap:wrap; align-items:center; gap:7px; }
+.featureHeading h4 { font-size:13px; line-height:1.3; margin:0; }
+.capabilityCard p { margin:7px 0 0; font-size:11px; line-height:1.6; color:var(--muted); }
+.premium { color:var(--primary); background:var(--primary-tint); font-size:9px; font-weight:800;
+ border:1px solid var(--primary-tint-line); border-radius:var(--r-pill); padding:2px 6px; }
+.overviewGrid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; padding:0 22px 20px; }
+.overviewGrid > div { border:1px solid var(--line); background:var(--surface-2); border-radius:var(--r-md);
+ padding:14px; display:grid; gap:7px; align-content:start; min-width:0; }
+.overviewGrid span { color:var(--muted); font-weight:750; font-size:11px; }
+.overviewGrid strong { font-size:clamp(17px,2vw,23px); line-height:1.2; overflow-wrap:anywhere; }
+.overviewGrid small { font-size:10px; color:var(--muted); line-height:1.45; overflow-wrap:anywhere; }
+.savedChoices { background:var(--surface-2); padding:12px; border-radius:var(--r-sm);
+ border:1px solid var(--line); display:grid; gap:5px; }
+.savedChoices > strong { font-size:12px; }
+.savedChoices p { font-size:12px; margin:0; overflow-wrap:anywhere; }
+.savedChoices small { font-size:10px; line-height:1.5; color:var(--muted); }
+.actionNotice { border:1px solid var(--line-strong); border-radius:var(--r-sm);
+ background:var(--surface); padding:12px; margin:12px 0; }
+.actionNotice strong { font-size:13px; }
+.actionNotice p { margin:6px 0; font-size:12px; line-height:1.6; }
+.actionNotice small { color:var(--muted); font-size:11px; }
+.clearChat { background:transparent; border:0; color:var(--muted); font-size:12px;
+ cursor:pointer; text-decoration:underline; padding:8px 0; }
+.panel > .chips { margin:14px 0; }
+@media(max-width:1080px) { .capabilityGrid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(max-width:860px) { .overviewGrid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+ .welcome { padding:0 15px 20px; } .welcomePhoto { height:270px; } }
+@media(max-width:560px) { .capabilityGrid { grid-template-columns:1fr; }
+ .welcomePhoto { height:300px; } .welcomeText { left:18px; bottom:20px; }
+ .welcomeText h3 { font-size:23px; } .overviewGrid { padding:0 15px 16px; }
+}

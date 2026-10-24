@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import Link from "next/link";
-import type { ChatMessage, CompanionAiStatus, CompanionReply, CompanionTeam, TeamsResponse } from "../../lib/companion-types";
+import Image from "next/image";
+import type { ChatMessage, CompanionAiStatus, CompanionLocalAction, CompanionReply, CompanionSuggestion, CompanionTeam, CompanionOverview, TeamsResponse } from "../../lib/companion-types";
 import type { Forecast, PredictionsResponse } from "../../lib/prediction-types";
 import styles from "./companion.module.css";
 
@@ -15,6 +16,43 @@ type TeamStats = {
 type TeamStatsResponse = { data_mode: "real"; teams: TeamStats[] };
 const API = (process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000").replace(/\/$/, "");
 const FAVORITE_KEY = "localsportsreel:companion:favourite-team:v1";
+const PROFILE_KEY = "localsportsreel:companion:profile:v1";
+const ACTION_KEY = "localsportsreel:companion:local-actions:v1:";
+
+// A local action does not schedule notifications or publish a prediction.
+function actionKey(teamId: string, season: number | null): string {
+  return ACTION_KEY + String(season || "") + ":" + teamId;
+}
+function readActions(teamId: string, season: number | null): CompanionLocalAction[] {
+  if (typeof window === "undefined" || !teamId || !season) return [];
+  try {
+    const raw = localStorage.getItem(actionKey(teamId, season));
+    if (!raw || raw.length > 20000) return [];
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((action): action is CompanionLocalAction =>
+      action && typeof action === "object" &&
+      (action.tool === "set_alert" || action.tool === "save_prediction") &&
+      action.team_id === teamId && action.season === season).slice(-10) : [];
+  } catch { return []; }
+}
+function saveAction(action: CompanionLocalAction): boolean {
+  try {
+    const current = readActions(action.team_id, action.season);
+    const updated = current.filter(item => item.tool !== action.tool ||
+      (item.tool === "save_prediction" && action.tool === "save_prediction" && item.game_id !== action.game_id));
+    localStorage.setItem(actionKey(action.team_id, action.season),
+      JSON.stringify([...updated, action].slice(-10)));
+    return true;
+  } catch { return false; }
+}
+const FEATURES = [
+  { icon: "💬", title: "Answers about your team", detail: "Ask about the table, form, fixtures or scorers. Mention another club for a comparison.", premium: false },
+  { icon: "🏟️", title: "Game night", detail: "Follow real match information and explore upcoming game outcomes.", premium: false },
+  { icon: "✅", title: "Checked facts", detail: "Every numerical claim is checked against supplied facts. No betting tips.", premium: false },
+  { icon: "📈", title: "Playoff chances", detail: "Explore top-four points scenarios. Official playoff qualification odds are not yet available.", premium: true },
+  { icon: "🎙️", title: "Daily podcast", detail: "Hear fact-verified briefings and two-host podcast scripts through your browser.", premium: true },
+  { icon: "🔔", title: "Alerts and predictions", detail: "Save score guesses and alert preferences locally. No automatic notifications yet.", premium: true },
+] as const;
 const TABS: Tab[] = ["chat", "tonight", "table", "podcast"];
 const PROMPTS = [
   "How is our recent form?", "Who's our next opponent?",
@@ -37,7 +75,7 @@ async function jsonResponse<T>(response: Response): Promise<T> {
 }
 
 /** Treat all AI-generated content as plain text, never HTML. */
-function Answer({ reply }: { reply: CompanionReply }) {
+function Answer({ reply, actionSaved }: { reply: CompanionReply; actionSaved?: boolean }) {
   return <div className={styles.answer}>
     <p className={styles.replyText}>{reply.text}</p>
     <div className={styles.meta}>
@@ -47,6 +85,16 @@ function Answer({ reply }: { reply: CompanionReply }) {
       <span>Facts: {reply.verification_status}</span>
     </div>
     <p className={styles.muted}>{reply.mode_message}</p>
+    {reply.action && <div className={styles.actionNotice} role="status">
+      <strong>{actionSaved ? "Saved in this browser" : "Could not save automatically"}</strong>
+      <p>{reply.action.tool === "save_prediction"
+        ? "Your pick: " + reply.action.home_team + " " + reply.action.home_goals + "–" +
+          reply.action.away_goals + " " + reply.action.away_team
+        : reply.action.threshold != null
+          ? "Alert preference: below " + reply.action.threshold + "%."
+          : "Alert preference: top-four points race."}</p>
+      <small>Demo only · no push notifications, automatic checks or shared account storage.</small>
+    </div>}
     {reply.forecast_warning && <p className={styles.muted}>{reply.forecast_warning}</p>}
     {reply.impact_warning && <p className={styles.muted}>{reply.impact_warning}</p>}
     {reply.impact && <div className={styles.forecastPreview}>
@@ -89,6 +137,14 @@ export default function CompanionPage() {
   const [useAi, setUseAi] = useState(false);
   const [aiStatus, setAiStatus] = useState<CompanionAiStatus | null>(null);
   const [aiStatusLoading, setAiStatusLoading] = useState(true);
+  const [userName, setUserName] = useState("");
+  const [answerLength, setAnswerLength] = useState<"short" | "normal" | "long">("normal");
+  const [fanSince, setFanSince] = useState("");
+  const [favouritePlayer, setFavouritePlayer] = useState("");
+  const [profileLoaded, setProfileLoaded] = useState(false);
+  const [suggestions, setSuggestions] = useState<CompanionSuggestion[]>([]);
+  const [savedActions, setSavedActions] = useState<CompanionLocalAction[]>([]);
+  const [overview, setOverview] = useState<CompanionOverview | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -105,6 +161,57 @@ export default function CompanionPage() {
   const [statsError, setStatsError] = useState("");
   const [statsLoading, setStatsLoading] = useState(false);
   const sequence = useRef(0);
+
+  // Only non-secret, optional preferences belong in browser storage.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(PROFILE_KEY);
+      if (raw && raw.length < 2000) {
+        const parsed: unknown = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") {
+          const p = parsed as Record<string, unknown>;
+          if (typeof p.userName === "string") setUserName(p.userName.slice(0, 40));
+          if (["short", "normal", "long"].includes(String(p.answerLength)))
+            setAnswerLength(p.answerLength as "short" | "normal" | "long");
+          if (typeof p.fanSince === "string") setFanSince(p.fanSince.slice(0, 4));
+          if (typeof p.favouritePlayer === "string") setFavouritePlayer(p.favouritePlayer.slice(0, 80));
+        }
+      }
+    } catch { /* Local storage is optional and untrusted. */ }
+    setProfileLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (!profileLoaded) return;
+    try {
+      localStorage.setItem(PROFILE_KEY, JSON.stringify({
+        userName, answerLength, fanSince, favouritePlayer,
+      }));
+    } catch { /* Browser privacy settings can disable persistent preferences. */ }
+  }, [profileLoaded, userName, answerLength, fanSince, favouritePlayer]);
+
+  useEffect(() => {
+    setSavedActions(readActions(teamId, season));
+  }, [teamId, season]);
+
+  useEffect(() => {
+    if (!teamId) return;
+    const controller = new AbortController();
+    async function loadOverview() {
+      try {
+        const params = new URLSearchParams({ team_id: teamId });
+        if (season) params.set("season", String(season));
+        const response = await jsonResponse<CompanionOverview>(
+          await fetch(API + "/api/companion/overview?" + params, { signal: controller.signal }),
+        );
+        if (!controller.signal.aborted) setOverview(response);
+      } catch {
+        if (!controller.signal.aborted) setOverview(null);
+      }
+    }
+    void loadOverview();
+    return () => controller.abort();
+  }, [teamId, season]);
 
   // The backend is the source of truth for AI availability. Enable model
   // responses by default only when a server-side API key is configured.
@@ -146,6 +253,7 @@ export default function CompanionPage() {
         if (controller.signal.aborted) return;
         setTeams(data.teams);
         setSeason(data.season);
+        setSuggestions(data.suggestions || []);
         let saved = "";
         try { saved = localStorage.getItem(FAVORITE_KEY) || ""; } catch { /* optional */ }
         const preferred = data.teams.find(item => item.id === saved)
@@ -174,6 +282,7 @@ export default function CompanionPage() {
     setTeamId(nextId);
     setMessages([]);
     setScript(null);
+    setOverview(null);
     setForecast(null);
     setForecastLoading(true);
     setForecastError("");
@@ -197,7 +306,9 @@ export default function CompanionPage() {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           team_id: teamId, season, kind, message: message.trim(),
-          persona, language, use_ai: useAi && Boolean(aiStatus?.available),
+          persona, language, user_name: userName.trim(),
+          answer_length: answerLength, fan_since: fanSince, favourite_player: favouritePlayer,
+          use_ai: useAi && Boolean(aiStatus?.available),
           include_forecast: kind === "chat" &&
             /\b(predict|forecast|chances?|probabilit|win|lose|tonight|what if|what happens|impact|points)\b/i.test(message),
           include_impact: kind === "chat" &&
@@ -208,9 +319,15 @@ export default function CompanionPage() {
         }),
       }));
       if (sequence.current !== current) return;
+      setSuggestions(data.suggestions || []);
+      let actionSaved: boolean | undefined;
+      if (data.action) {
+        actionSaved = saveAction(data.action);
+        if (actionSaved) setSavedActions(readActions(teamId, season));
+      }
       if (kind === "chat") {
         setMessages(previous => [...previous,
-          { id: current * 2 + 1, role: "assistant", content: data.text, reply: data }]);
+          { id: current * 2 + 1, role: "assistant", content: data.text, reply: data, actionSaved }]);
       } else setScript(data);
     } catch (failure) {
       if (sequence.current === current)
@@ -292,7 +409,17 @@ export default function CompanionPage() {
     </header>
     <div className={styles.layout}>
       <aside className={styles.sidebar} aria-label="Fan preferences">
+        <div className={styles.sidebarBrand}><strong>Your AI sports assistant<span>.</span></strong>
+          <small>Personalised for you</small></div>
+        <label>Sport
+          <select value="Hockey" disabled><option value="Hockey">🏒 Ice hockey · Liiga</option></select>
+        </label>
         <h2>Personalise</h2>
+        <label>Your name
+          <input type="text" maxLength={40} autoComplete="nickname"
+            value={userName} placeholder="Optional"
+            onChange={event => setUserName(event.target.value)} />
+        </label>
         <label>Favourite team
           <select value={teamId} onChange={event => changeTeam(event.target.value)}
             disabled={teamsLoading || !teams.length}>
@@ -314,6 +441,21 @@ export default function CompanionPage() {
             <option value="English">English</option><option value="Finnish">Suomi</option>
           </select>
         </label>
+        <label>Answer length
+          <select value={answerLength} onChange={event => setAnswerLength(event.target.value as typeof answerLength)}>
+            <option value="normal">Normal</option><option value="short">Short</option><option value="long">Long</option>
+          </select>
+        </label>
+        <label>Fan since (year)
+          <input type="text" inputMode="numeric" maxLength={4} pattern="[0-9]{4}"
+            value={fanSince} placeholder="Optional"
+            onChange={event => setFanSince(event.target.value.replace(/[^0-9]/g, "").slice(0, 4))} />
+        </label>
+        <label>Favourite player
+          <input type="text" value={favouritePlayer} maxLength={80}
+            placeholder="Optional · your choice"
+            onChange={event => setFavouritePlayer(event.target.value)} />
+        </label>
         <div className={styles.aiStatus} role="status">
           <strong>{aiStatusLoading ? "Checking AI…" : aiStatus?.available ? "AI chat configured" : "Offline demo mode"}</strong>
           <p>{aiStatus?.message || "Checking the backend model configuration."}</p>
@@ -323,6 +465,17 @@ export default function CompanionPage() {
           <span>Use AI-generated replies</span>
         </label>}
         <p className={styles.muted}>AI requests go through our Python backend; private keys are never sent to the browser. Replies are fact-checked before display.</p>
+        {savedActions.length > 0 && <div className={styles.savedChoices}>
+          <strong>Saved on this device</strong>
+          {savedActions.map((action, i) => <p key={i}>
+            {action.tool === "save_prediction"
+              ? action.home_team + " " + action.home_goals + "–" + action.away_goals + " " + action.away_team
+              : action.threshold != null
+                ? "Alert preference below " + action.threshold + "%"
+                : "Top-four race alert preference"}
+          </p>)}
+          <small>No background notifications or shared account.</small>
+        </div>}
         <nav className={styles.sidebarLinks} aria-label="Related pages">
           <Link href="/predictions">Full predictions ↗</Link>
           <Link href="/liiga">Liiga and Fan Zone ↗</Link>
@@ -337,6 +490,37 @@ export default function CompanionPage() {
           </div>
           <span className={styles.sourceBadge}>REAL LIIGA DATA</span>
         </div>
+        {tab === "chat" && messages.length === 0 && <div className={styles.welcome}>
+          <div className={styles.welcomePhoto}>
+            <Image src="/companion-hero.jpg" alt="AI-generated illustration of Finnish ice hockey fans"
+              fill priority sizes="(max-width: 860px) 100vw, 900px" />
+            <div className={styles.welcomeText}>
+              <span>Liiga · {team?.city || "Finland"}</span>
+              <h3>{userName.trim() ? "Hi " + userName.trim() + "!" : "Hi!"} I follow {team?.name || "your team"} for you.</h3>
+              <p>Ask me anything, any time. Here's what I can do.</p>
+              <button type="button" onClick={() => document.getElementById("fan-chat")?.focus()}>
+                💬 Chat with me here
+              </button>
+            </div>
+          </div>
+          <div className={styles.capabilityGrid} aria-label="Fan companion features">
+            {FEATURES.map(feature => <article key={feature.title} className={styles.capabilityCard}>
+              <span className={styles.featureIcon} aria-hidden="true">{feature.icon}</span>
+              <div className={styles.featureHeading}><h4>{feature.title}</h4>
+                {feature.premium && <span className={styles.premium}>Premium</span>}
+              </div>
+              <p>{feature.detail}</p>
+            </article>)}
+          </div>
+        </div>}
+        {overview && overview.team_id === teamId && <div className={styles.overviewGrid} aria-label="Team overview from real Liiga data">
+          <div><span>Position</span><strong>{overview.rank}</strong><small>{overview.games_played} games played</small></div>
+          <div><span>Points</span><strong>{overview.points}</strong><small>{overview.points_gap}</small></div>
+          <div><span>Next game</span><strong>{overview.next_game || "Not scheduled"}</strong>
+            <small>From Liiga schedule</small></div>
+          <div><span>Top-four race</span><strong><Link href="/predictions">Explore ↗</Link></strong>
+            <small>Points projections only · not playoff odds</small></div>
+        </div>}
         <nav className={styles.tabs} aria-label="Companion sections">
           {TABS.map(key => <button key={key} aria-current={tab === key ? "page" : undefined}
             onClick={() => {
@@ -356,25 +540,30 @@ export default function CompanionPage() {
         {tab === "chat" && <section className={styles.panel} aria-label="Chat with the companion">
           <div className={styles.chatWindow} aria-live="polite">
             {!messages.length && <div className={styles.empty}>
-              <h3>Hi! I follow {team?.name || "your team"}.</h3>
-              <p>Ask about form, fixtures and experimental match predictions.</p>
-              <div className={styles.chips}>
-                {PROMPTS.map(p => <button key={p} disabled={!teamId || sending || aiStatusLoading}
-                  onClick={() => void ask("chat", p)}>{p}</button>)}
-              </div>
+              <h3>Ask your {team?.name || "Liiga"} assistant anything…</h3>
+              <p>Your questions are grounded in real match data. Try a team comparison, a score prediction, or a question about the next game.</p>
             </div>}
             {messages.map(msg => <article key={msg.id}
               className={msg.role === "user" ? styles.userMessage : styles.assistantMessage}>
               <strong>{msg.role === "user" ? "You" : "Fan Companion"}</strong>
-              {msg.reply ? <Answer reply={msg.reply} /> : <p>{msg.content}</p>}
+              {msg.reply ? <Answer reply={msg.reply} actionSaved={msg.actionSaved} /> : <p>{msg.content}</p>}
             </article>)}
             {sending && <p role="status" className={styles.muted}>Checking sources and writing your reply…</p>}
           </div>
+          <div className={styles.chips} aria-label="Suggested follow-up questions">
+            {(suggestions.length ? suggestions : PROMPTS.map(p => ({label:p,question:p}))).map(item =>
+              <button key={item.label + item.question} disabled={!teamId || sending || aiStatusLoading}
+                onClick={() => void ask("chat", item.question)}>{item.label}</button>)}
+          </div>
+          {messages.length > 0 && <button type="button" className={styles.clearChat}
+            onClick={() => {sequence.current++; setMessages([]); setError(""); setSending(false);}}>
+            Clear chat
+          </button>}
           <form className={styles.chatForm} onSubmit={submit}>
             <label htmlFor="fan-chat">Ask your companion</label>
             <textarea id="fan-chat" value={draft} rows={3} maxLength={1200}
               onChange={event => setDraft(event.target.value)}
-              placeholder="What happens if Kärpät wins?" disabled={sending || !teamId || aiStatusLoading}/>
+              placeholder={"Ask your " + (team?.name || "team") + " assistant anything…"} disabled={sending || !teamId || aiStatusLoading}/>
             <div className={styles.formActions}>
               <span>{draft.length}/1200</span>
               <button type="submit" disabled={!draft.trim() || !teamId || sending || aiStatusLoading}>Send ↗</button>
