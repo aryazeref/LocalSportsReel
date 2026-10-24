@@ -21,28 +21,47 @@ as part of the unified website.
 - /liiga includes the browser-local Fan Zone demonstration.
 - /pricing and the predictions paywall use simulated localStorage entitlements.
 
-## Home discovery from actual Liiga matches
+## Home: short-form reels + fan discussion
 
-The Next.js \`/\` homepage no longer calls the fictional \`/api/feed\`
-endpoint. It uses \`GET /api/liiga/discover\`, which reads the **same cached
-normalized Liiga season** as the match centre and Fan Companion.
+**Homepage concept:** a 30–60-second vertical goal/recap video and a
+comment column for each individual clip, similar to a social short-video
+feed—not a fixture dashboard. The latest completed Liiga matches and actual
+goal metadata come from \`GET /api/liiga/discover\`, sharing the same cached
+provider snapshot used by /liiga and the prediction engine. The home now
+extracts a goal-by-goal reel queue, newest matches first, with real team
+names, scorer (when known), final score, city and match date. If the provider
+has no goal-level scorers for a match, it creates a factual *match recap*
+placeholder rather than inventing a goal.
 
-The route returns distinct sets of up to 3 currently reported live matches,
-the 6 most recently finished matches, and the next 9 upcoming matches.
-It includes the list of **venue cities actually present** in the Liiga
-dataset and supports \`?city=Oulu\`. A venue city is not a geolocation radius
-or the visitor's location.
+**Real sports footage is a different asset.** \`has_video\` in the upstream
+goal event is not evidence of permission to redistribute that clip. We do
+not scrape, download, copy or re-host Liiga broadcast footage. Only approved
+MP4/WebM assets are mapped to a stable reel ID in
+\`frontend/lib/reel-media.ts\`, under \`frontend/public/reels/\`.
 
-Cards show teams, final/live scores where available, venue and city,
-start time, and known scorer names from the upstream data. They are clearly
-marked as **illustrated match summaries**: there are no authorized reels or
-videos in this endpoint, and no fictional athlete, fictional excitement
-score, distance, or story is invented. If the provider fails, the home
-shows an error; it never silently substitutes dummy sports content.
+For a hackathon preview you can instead press **Preview your own 30–60s
+video** on any reel and pick a video *from your own machine* (MP4/WebM,
+max 100 MB). Browsers verify its duration; files are displayed from temporary
+\`blob:\` URLs and never sent to FastAPI, GitHub or cloud storage. This
+visualization is not public video publishing. Add rights-cleared final clips
+for the actual match/goal and update the manifest for a permanent demo.
+Use your team's license/permission documentation to confirm re-use rights.
+Do not commit proprietary footage or external provider tokens.
 
-The original \`/api/feed\` and \`/api/stories/{moment_id}\` remain available as
-separately documented synthetic-demo backend endpoints for development and
-are no longer invoked by the homepage.
+Reel IDs use \`{season}:{gameId}:goal:{goalArrayIndex}\` (or
+\`{season}:{gameId}:match\` for missing goal metadata). This keeps the
+comment thread distinct for different goals in the same game. Comments are
+saved in the user's browser only, limited by length, and never shown to
+other users. For public discussion we still need authentication,
+a database, moderation, reports, privacy policy and abuse prevention.
+
+The homepage preserves venue-city filtering and links out to the Liiga
+match centre, Predictions and Companion. Video ranking is chronological,
+*not* a fabricated measure of which goal was objectively the coolest.
+
+The original \`/api/feed\` and \`/api/stories/{moment_id}\` remain separately
+accessible fictional demo endpoints in the backend, but are no longer
+used by the homepage.
 
 ## Backend API
 
@@ -151,8 +170,8 @@ Predictions and what-if calculations continue to come exclusively from
   records have **not** been migrated. These are deliberately excluded rather
   than presented as real production services.
 - Exact tie-break/playoff qualification modeling remains unverified.
-- The / home page now displays real Liiga match summaries; it still has no
-  licensed Liiga video clips. The old synthetic /api/feed remains separate.
+- The / home page is a reel-first player with **real goal and match metadata**, but
+  its video requires rights-cleared files or local preview. No licensed clips are shipped.
 - No public posting or media-upload endpoint exists. Production requires
   identity, database, object storage, moderation, consent and privacy processes.
 

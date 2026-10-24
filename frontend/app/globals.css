@@ -246,7 +246,7 @@ h1, h2, h3, p { margin-top: 0; }
 .reelHero { min-height:340px; }
 .reelHero .heroText { padding:39px 0; }
 .reelHero .heroGraphic { top:-34px; opacity:.55; }
-.reelHero .hero h1 { margin:16px 0; }
+.reelHero h1 { margin:16px 0; }
 .reelHero + .discover { padding-top:33px; }
 @media(max-width:680px) {
   .reelHero { min-height:310px; }
