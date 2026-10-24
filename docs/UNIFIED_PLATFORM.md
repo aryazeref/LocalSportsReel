@@ -21,8 +21,32 @@ as part of the unified website.
 - /liiga includes the browser-local Fan Zone demonstration.
 - /pricing and the predictions paywall use simulated localStorage entitlements.
 
+## Home discovery from actual Liiga matches
+
+The Next.js \`/\` homepage no longer calls the fictional \`/api/feed\`
+endpoint. It uses \`GET /api/liiga/discover\`, which reads the **same cached
+normalized Liiga season** as the match centre and Fan Companion.
+
+The route returns distinct sets of up to 3 currently reported live matches,
+the 6 most recently finished matches, and the next 9 upcoming matches.
+It includes the list of **venue cities actually present** in the Liiga
+dataset and supports \`?city=Oulu\`. A venue city is not a geolocation radius
+or the visitor's location.
+
+Cards show teams, final/live scores where available, venue and city,
+start time, and known scorer names from the upstream data. They are clearly
+marked as **illustrated match summaries**: there are no authorized reels or
+videos in this endpoint, and no fictional athlete, fictional excitement
+score, distance, or story is invented. If the provider fails, the home
+shows an error; it never silently substitutes dummy sports content.
+
+The original \`/api/feed\` and \`/api/stories/{moment_id}\` remain available as
+separately documented synthetic-demo backend endpoints for development and
+are no longer invoked by the homepage.
+
 ## Backend API
 
+- GET /api/liiga/discover — real finished, live and upcoming matches for home cards.
 - GET /api/companion/teams — Liiga teams from the shared backend data source.
 - POST /api/companion/respond — send a chat question or request a briefing or
   podcast script. The optional include_forecast flag calls the existing
@@ -127,8 +151,8 @@ Predictions and what-if calculations continue to come exclusively from
   records have **not** been migrated. These are deliberately excluded rather
   than presented as real production services.
 - Exact tie-break/playoff qualification modeling remains unverified.
-- The / home page remains a clearly labelled fictional discovery demo and
-  does not contain licensed Liiga video highlights.
+- The / home page now displays real Liiga match summaries; it still has no
+  licensed Liiga video clips. The old synthetic /api/feed remains separate.
 - No public posting or media-upload endpoint exists. Production requires
   identity, database, object storage, moderation, consent and privacy processes.
 

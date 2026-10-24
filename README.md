@@ -1,5 +1,7 @@
 # Local SportsReel · Hackathon MVP 0.1
 
+> **Unified match discovery:** The homepage now uses real Liiga results and upcoming fixtures from `/api/liiga/discover`, with city filtering by stadium/venue. These are illustrated match summaries, not licensed video highlights.
+
 > **Unified demo:** The new Next.js `/companion` page combines the Python Fan Companion's fact-verified chat and briefings with existing FastAPI Liiga/prediction services. See [integration documentation](docs/UNIFIED_PLATFORM.md). The Streamlit prototype is retained but is no longer required to use the unified website.
 
 
