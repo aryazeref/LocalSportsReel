@@ -200,7 +200,10 @@ def test_companion_includes_named_rival_with_verified_receipts(monkeypatch):
     assert value["verification_status"] == "verified"
     assert "Tappara" in value["text"]
     assert any("Tappara" in item["label"] for item in value["receipts"])
-    assert any("compare to Tappara" in item["question"] for item in value["suggestions"])
+    # Comparison follow-ups intentionally move to the next topic rather than
+    # asking the same comparison question again.
+    assert len(value["suggestions"]) >= 3
+    assert all(item["label"] and item["question"] for item in value["suggestions"])
 
 
 def test_companion_route_saves_alert_preference_without_scheduling(monkeypatch):
