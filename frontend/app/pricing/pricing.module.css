@@ -1,0 +1,20 @@
+.page { min-height: 100vh; padding: 0 max(20px, calc((100% - 1180px) / 2)) 70px; color: var(--text); background: var(--bg); }
+.header { padding: 64px 0 40px; max-width: 760px; }
+.eyebrow { margin: 0 0 14px; color: var(--primary); font-size: 11px; font-weight: 800; letter-spacing: .15em; }
+.header h1 { margin: 0; font-size: clamp(43px, 7vw, 78px); line-height: .98; letter-spacing: -.055em; }
+.header h1 span { color: var(--primary); }
+.lede { max-width: 660px; margin: 22px 0 0; color: var(--muted); font-size: var(--fs-body); line-height: 1.8; }
+.cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: stretch; gap: 18px; padding: 12px 0 38px; }
+.demoTools { display: flex; align-items: center; justify-content: space-between; gap: 22px; padding: 22px 24px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); }
+.demoTools .eyebrow { margin-bottom: 7px; }
+.demoTools h2 { margin: 0; font-size: 19px; letter-spacing: -.02em; }
+.demoTools p:last-child { margin: 8px 0 0; color: var(--muted); font-size: 12px; line-height: 1.7; }
+.demoTools .accessNotice { color: var(--primary); font-weight: 700; }
+.reset { flex-shrink: 0; min-height: var(--touch); padding: 10px 15px; border: 1px solid var(--line-strong); border-radius: var(--r-pill); background: var(--surface); color: var(--text); font-size: 12px; font-weight: 800; }
+.reset:hover { background: var(--surface-2); }
+.planned { display: flex; gap: 13px; margin-top: 18px; padding: 17px; border: 1px dashed var(--line-strong); border-radius: var(--r-md); color: var(--muted); font-size: 12px; line-height: 1.7; }
+.planned strong { flex-shrink: 0; color: var(--text); }
+.security { max-width: 970px; margin: 17px 0 0; color: var(--muted); font-size: 12px; line-height: 1.8; }
+.page button:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+@media (max-width: 920px) { .cards { grid-template-columns: 1fr 1fr; } .cards > :last-child { grid-column: 1 / -1; } }
+@media (max-width: 620px) { .header { padding: 42px 0 28px; } .cards { grid-template-columns: 1fr; gap: 23px; } .cards > :last-child { grid-column: auto; } .demoTools { align-items: stretch; flex-direction: column; padding: 19px; } .reset { width: 100%; } .planned { flex-direction: column; gap: 5px; } }

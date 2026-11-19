@@ -100,6 +100,7 @@ def normalize_game(raw: dict[str, Any]) -> LiigaGame:
         venue=rink.get("name"),
         city=rink.get("city"),
         goal_events=events,
+        finished_type=raw.get("finishedType"),
     )
 
 

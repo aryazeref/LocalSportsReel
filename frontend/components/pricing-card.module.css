@@ -1,0 +1,18 @@
+.card { position: relative; display: flex; flex-direction: column; min-width: 0; padding: 29px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); box-shadow: 0 6px 26px rgba(15, 26, 42, .08); }
+.featured { border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary), 0 6px 26px rgba(15, 26, 42, .08); }
+.badge { position: absolute; top: 0; right: 22px; transform: translateY(-50%); padding: 7px 10px; border-radius: var(--r-pill); background: var(--primary); color: var(--on-primary); font-size: 10px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
+.name { margin: 0 0 14px; font-size: 13px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.price { display: flex; flex-wrap: wrap; align-items: baseline; gap: 7px; margin: 0; font-size: clamp(34px, 4vw, 47px); font-weight: 800; letter-spacing: -.06em; }
+.price span { color: var(--muted); font-size: 12px; font-weight: 600; letter-spacing: 0; }
+.description { min-height: 50px; margin: 12px 0 22px; color: var(--muted); font-size: var(--fs-small); line-height: 1.7; }
+.card ul { display: grid; gap: 13px; margin: 0 0 26px; padding: 0; list-style: none; }
+.card li { position: relative; padding-left: 23px; font-size: 12px; line-height: 1.6; }
+.card li::before { position: absolute; left: 0; color: var(--primary); content: "✓"; font-weight: 900; }
+.card button, .card a { display: inline-flex; justify-content: center; align-items: center; min-height: var(--touch); margin-top: auto; padding: 11px 15px; border-radius: var(--r-pill); text-decoration: none; font-size: 12px; font-weight: 800; }
+.secondary { border: 1px solid var(--line-strong); background: var(--surface); color: var(--text); }
+.secondary:hover { background: var(--surface-2); }
+.primary { border: 1px solid var(--primary); background: var(--primary); color: var(--on-primary); }
+.primary:hover { background: var(--primary-hover); }
+.card button:disabled { cursor: default; opacity: .75; }
+.current { margin-top: 10px; color: var(--muted); text-align: center; font-size: 11px; }
+.card button:focus-visible, .card a:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }

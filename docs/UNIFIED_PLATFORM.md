@@ -1,0 +1,260 @@
+# Unified LocalSportsReel — integration MVP
+
+Branch: feature/unified-platform. Intended target: main.
+
+## Architecture and ownership
+
+**Next.js is the only user-facing frontend.** The old Streamlit app remains in
+fan-companion/ as a reference/prototype. It is not mounted, embedded, or started
+as part of the unified website.
+
+- Existing backend/app/prediction/** is the **sole authority** for match
+  probabilities and regular-season points-impact scenarios.
+- Existing fan-companion/companion/** provides verified chat, formatting,
+  personalities, briefing/podcast script generation, and optional LLM backends.
+- backend/app/services/companion_bridge.py maps the **existing cached Liiga
+  dataset** into the teammate's fact input contract. It does not fetch Liiga
+  independently or use fan-companion/companion/scenarios.py.
+- backend/app/companion_api.py exposes these operations as JSON.
+- frontend/app/companion/page.tsx supplies Chat, Tonight, Teams and Podcast
+  screens in Next.js. The shared navigation points to /companion.
+- /liiga includes the browser-local Fan Zone demonstration.
+- /pricing and the predictions paywall use simulated localStorage entitlements.
+
+## Streamlit-to-Next.js Companion feature parity
+
+The Next.js \`/companion\` page uses a **copy of the original**
+\`fan-companion/assets/hero.jpg\` at \`frontend/public/companion-hero.jpg\`.
+No files under \`fan-companion/\` have been changed. The welcome includes
+the "Chat with me here" focus button and all six capability cards,
+with three visibly marked *Premium*. Badges signal the concept's pricing
+tiers, **not** a server-side paid entitlement or a functioning checkout.
+
+Personalise supports name, favourite club, language, response style,
+short/normal/long answers, fan-since year, and an optional favourite-player
+name. Non-secret preferences persist in this browser. The backend passes
+the name and length into the teammate's verified Companion class.
+
+For chat questions, the FastAPI \`/api/companion/respond\` route calls
+the original \`find_teams\` and \`add_team_facts\` functions, so another
+club mentioned in a question has real comparative facts, fact receipts
+and the same verification rules as the selected club. The original
+\`route()\` classifies plain-language podcast, score-prediction and alert
+requests using its deterministic keyword path (no extra LLM call).
+\`follow_ups()\` supplies context-dependent, clickable suggested questions
+after each response; the welcome suggestions also originate there.
+
+**Important action limitation:** A request like "My prediction is 3-2"
+or "Set an alert if chances drop below 15%" returns a typed action,
+which the Next.js page saves privately in localStorage. There is no
+persistent database, multi-user sharing, notification scheduler,
+background check or delivered alert. The UI explicitly labels this as
+local demo behavior, never claims a real alert has been activated,
+and never sends action values to a betting service.
+
+The \`/api/companion/overview\` endpoint exposes fact-derived rank, points,
+games played and next fixture. The fourth summary card links to
+\`/predictions\` rather than manufacturing exact top-four/playoff odds.
+The original Streamlit's separate season simulator and event-by-event
+live simulator remain **unmigrated** by design: the evaluated
+\`backend/app/prediction/**\` code is still the single source of statistical
+forecast and what-if calculations.
+
+AI/offline/fallback labels, citation receipts and fact verification are
+preserved. All action routing is marked "offline" because it is
+deterministic. The copied photo is an illustration, not match footage.
+
+## Home: short-form reels + fan discussion
+
+**Homepage concept:** a 30–60-second vertical goal/recap video and a
+comment column for each individual clip, similar to a social short-video
+feed—not a fixture dashboard. The latest completed Liiga matches and actual
+goal metadata come from \`GET /api/liiga/discover\`, sharing the same cached
+provider snapshot used by /liiga and the prediction engine. The home now
+extracts a goal-by-goal reel queue, newest matches first, with real team
+names, scorer (when known), final score, city and match date. If the provider
+has no goal-level scorers for a match, it creates a factual *match recap*
+placeholder rather than inventing a goal.
+
+**Real sports footage is a different asset.** \`has_video\` in the upstream
+goal event is not evidence of permission to redistribute that clip. We do
+not scrape, download, copy or re-host Liiga broadcast footage. Only approved
+MP4/WebM assets are mapped to a stable reel ID in
+\`frontend/lib/reel-media.ts\`, under \`frontend/public/reels/\`.
+
+No highlight footage is bundled with the hackathon prototype. The reel
+player displays **Video unavailable** unless an approved clip is connected.
+There is no local video upload, file chooser, or preview control. If
+rights-approved footage becomes available later, the existing media manifest
+can connect that footage to the corresponding reel.
+
+Reel IDs use \`{season}:{gameId}:goal:{goalArrayIndex}\` (or
+\`{season}:{gameId}:match\` for missing goal metadata). This keeps the
+comment thread distinct for different goals in the same game. Comments are
+saved in the user's browser only, limited by length, and never shown to
+other users. For public discussion we still need authentication,
+a database, moderation, reports, privacy policy and abuse prevention.
+
+The homepage preserves venue-city filtering and links out to the Liiga
+match centre, Predictions and Companion. Video ranking is chronological,
+*not* a fabricated measure of which goal was objectively the coolest.
+
+The original \`/api/feed\` and \`/api/stories/{moment_id}\` remain separately
+accessible fictional demo endpoints in the backend, but are no longer
+used by the homepage.
+
+## Backend API
+
+- GET /api/liiga/discover — real finished, live and upcoming matches for home cards.
+- GET /api/companion/teams — Liiga teams from the shared backend data source.
+- GET /api/companion/overview — real Liiga team overview for the welcome screen.
+- POST /api/companion/respond — send a chat question or request a briefing or
+  podcast script. The optional include_forecast flag calls the existing
+  get_predictions function. The optional include_impact flag calls the existing
+  get_impact function using the same selected model version.
+- GET /api/liiga/predictions — original authoritative statistical forecasts.
+- GET /api/liiga/predictions/{game_id}/impact — original simulated points impacts.
+
+Numerical claims generated by the companion are checked against fact receipts.
+If model data is unavailable, the companion reports that limitation rather than
+making up probabilities. Its separate Poisson simulator is never called from
+the new routes. Points-only top-N scenarios are *not* exact playoff odds.
+
+The companion currently handles one selected upcoming fixture per team for
+forecast/impact questions. Future multi-fixture and agent-tool routing require
+further integration.
+
+## Run on Windows / PowerShell
+
+From the project root after switching to feature/unified-platform:
+
+Terminal 1:
+
+    cd backend
+    py -m venv .venv
+    .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+    .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
+
+Terminal 2:
+
+    cd frontend
+    npm ci
+    npm run dev
+
+Open http://localhost:3000/companion or use the site navigation.
+
+The first prediction request can prepare historical data/model artifacts,
+which may take longer than subsequent cached requests.
+
+### Enable real AI conversation (Windows PowerShell)
+
+**Why a message may say "Offline demo":** With no model configured, the
+companion uses deterministic Python templates. They are fact-checked but are
+not LLM-generated text. The UI now checks \`GET /api/companion/status\` and
+displays "AI chat configured" or "Offline demo mode". It also labels each
+reply according to the engine actually used, including fallback on API error.
+
+1. From the project root, open PowerShell and create a private backend config:
+
+       cd backend
+       Copy-Item .env.example .env
+
+2. Open \`backend/.env\` in your editor. For OpenAI, set:
+
+       COMPANION_ENABLE_LLM=true
+       LLM_PROVIDER=openai
+       OPENAI_API_KEY=your_actual_private_api_key_here
+       OPENAI_MODEL=gpt-4o-mini
+
+   Or configure \`LLM_PROVIDER=gemini\` with \`GEMINI_API_KEY\`, or
+   \`LLM_PROVIDER=anthropic\` with \`ANTHROPIC_API_KEY\`. API access may have
+   usage charges; ChatGPT subscription access does not grant an API key.
+   Do not paste API keys into chat, the frontend, or GitHub.
+
+3. Install backend dependencies and restart the FastAPI process:
+
+       .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+       .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
+
+   The backend now loads \`backend/.env\` itself. Environment variables that
+   are already set take precedence over the file.
+
+4. Verify the public **non-secret** status URL:
+   http://localhost:8000/api/companion/status
+   It should report \`available: true\`. This checks configuration, not key
+   validity, network availability, or billing quota.
+
+5. Open http://localhost:3000/companion. The browser selects actual AI
+   automatically when configured. Chat with the companion; an answer should
+   say **AI-generated** rather than **Offline demo**. If the API returns an
+   error or runs out of quota, the companion safely uses its offline templates
+   and clearly displays **Offline fallback**.
+
+\`fan-companion/\` remains unchanged. The backend explicitly uses the provider
+named by \`LLM_PROVIDER\`, even if there are keys for other providers in the
+environment. AI-generated claims are checked against verified Liiga facts.
+Predictions and what-if calculations continue to come exclusively from
+\`backend/app/prediction/\`.
+
+## Current limits — NOT production infrastructure
+
+- Comments persist *only in one browser* via localStorage. They are not shared.
+- Fan photos are temporary browser-only previews and never uploaded.
+- Pricing and checkout are demonstrations; no money changes hands, and
+  client-side entitlements provide no real security.
+- The Fan Companion's team preference stays in the current browser. Conversation
+  history is local component state, not a multi-user server-side chat history.
+- The podcast view generates text from the original companion code, and uses
+  browser speech synthesis where available; Gemini/provider TTS is not yet
+  bridged into the unified frontend.
+- Streamlit's live-event simulator, persistent alerts and per-user prediction
+  records have **not** been migrated. These are deliberately excluded rather
+  than presented as real production services.
+- Exact tie-break/playoff qualification modeling remains unverified.
+- The / home page is a reel-first player with **real goal and match metadata**,
+  but displays "Video unavailable" unless approved media is supplied.
+- No public posting or media-upload endpoint exists. Production requires
+  identity, database, object storage, moderation, consent and privacy processes.
+
+## Validation
+
+From backend/:
+
+    .\.venv\Scripts\python.exe -m pytest -q
+
+From frontend/:
+
+    npm ci
+    npm run lint
+    npm test
+    npm run build
+
+The CI workflow performs the same backend and frontend checks on PRs; it
+uses offline fixtures and needs no Liiga API key or paid LLM.
+
+## Code ownership
+
+The external team owns fan-companion/; update it from
+shampooshams/hackathon_oulu as an explicit, separate synchronization operation
+before adapting integrations. Do not edit fan-companion/ just to add Next.js
+frontend behavior. Keep the original prediction implementation stable and put
+cross-service adaptations in backend/app/services/companion_bridge.py.
+
+
+## Fan-facing forecasts (results-first interface)
+
+The public /predictions page deliberately presents match probabilities,
+four possible match outcomes, and concise regular-season points/rank impacts
+for the selected teams and nearby rivals. The long historical scoring tables,
+feature-level inputs, model-selection discussion, and simulation configuration
+are **not displayed** in the consumer interface.
+
+This is a presentation-only change: backend/app/prediction/** remains unchanged,
+its validations and historical evaluations remain in the repository, and the
+original forecast/impact API responses retain their provenance and limitations.
+A short user-friendly disclaimer remains visible. In particular, "top four on
+points" is **not** an official playoff qualification probability. Users should
+never interpret these estimated outcomes as guaranteed or betting advice.
+
+For developers and reviewers who need a technical audit, see
+docs/PREDICTION_DATA.md and docs/PREDICTION_EVALUATION.md.
